@@ -1,0 +1,7 @@
+yt-dlp[default]>=2026.10.26
+faster-whisper>=1.2.1
+opencv-python-headless>=4.10,<5
+google-genai>=1.0
+truststore>=0.10
+python-dotenv>=1.0
+numpy>=1.26

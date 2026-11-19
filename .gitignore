@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 .tools/
+.venv-clipper/
+__pycache__/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -35,6 +37,7 @@ logs/
 temp/
 tmp/
 uploads/
+data/clips/
 *.tmp
 
 # OS Files

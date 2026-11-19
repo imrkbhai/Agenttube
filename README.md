@@ -96,6 +96,18 @@ Each item links to its walkthrough in the [feature guide](docs/features.md).
 **Engage**
 - [Audience Engagement Studio](docs/features.md#audience-engagement-studio): comment sync, themes and questions, spam quarantine, reply drafts that post only after you approve them, and video ideas mined from repeated requests.
 
+## Clip Studio
+
+Turn a long video (yours, or another creator's **with their permission**) into review-ready clips: 9:16 Shorts under 60 seconds with a face-centred crop, word-by-word captions and a hook, plus 7–10 minute 16:9 clips. Speech is transcribed on your machine with faster-whisper; Gemini picks and scores the moments (hook, engagement, value, shareability), falling back to the loudest stretches when no AI is available. Nothing is uploaded: each job writes the clips and a `manifest.json` (credit, permission record, titles, descriptions, scores) with every clip marked `pending_review`.
+
+```bash
+python -m venv .venv-clipper
+.venv-clipper/Scripts/pip install -r clipper/requirements.txt   # macOS/Linux: .venv-clipper/bin/pip
+npm run clip -- "https://www.youtube.com/watch?v=..." --permission "email from @creator, 2026-11-19" --shorts 5 --long 1 --niche trading
+```
+
+Needs FFmpeg with libass on `PATH`. Output goes to `data/clips/<job>/`. Run `npm run clip -- --help` for all options; `--model` also accepts a local faster-whisper folder for networks that block model downloads. Moment selection is inspired by [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT).
+
 ## AI providers
 
 One key gets you started. Pick a text provider in the walkthrough: Gemini, OpenAI, OpenRouter (400+ models, including Claude), Kimi, MiMo, GLM, DeepSeek, or MiniMax. Gemini has free tiers for text and narration.

@@ -11,6 +11,7 @@
     "docs:screenshots": "node scripts/docs/capture-screenshots.js",
     "scheduler": "node schedules/daily-automation.js",
     "test": "node test.js",
+    "clip": "node scripts/clip.js",
     "agent:strategy": "node agents/content-strategy-agent.js",
     "agent:script": "node agents/script-writer-agent.js",
     "agent:thumbnail": "node agents/thumbnail-designer-agent.js",
