@@ -39,14 +39,18 @@ def live_status(url: str) -> dict:
 class Recorder:
     """FFmpeg copies the live stream to an MPEG-TS file, which stays readable while it grows."""
 
-    def __init__(self, stream_url: str, headers: dict, path: Path, log_path: Path):
+    def __init__(self, stream_urls: list, headers: dict, path: Path, log_path: Path):
         header_text = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+        inputs = []
+        for url in stream_urls:
+            inputs += [*(["-headers", header_text] if header_text else []), "-i", url]
+        # YouTube serves live video and audio as separate streams; FFmpeg merges them.
+        maps = ["-map", "0:v:0", "-map", "1:a:0"] if len(stream_urls) == 2 else ["-map", "0"]
         self.seconds = 0.0
         self._log = open(log_path, "ab")
         self.process = subprocess.Popen(
             ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-nostats", "-progress", "pipe:1",
-             *(["-headers", header_text] if header_text else []),
-             "-i", stream_url, "-map", "0", "-c", "copy", "-f", "mpegts", str(path)],
+             *inputs, *maps, "-c", "copy", "-f", "mpegts", str(path)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log,
         )
         threading.Thread(target=self._read_progress, daemon=True).start()
@@ -81,16 +85,17 @@ def _clock(seconds: float) -> str:
 def run_live(url: str, job_dir: Path, permission: str, creator: str | None, live_shorts: int,
              shorts: int, longs: int, niche: str, model: str, language: str | None, window: float) -> None:
     update_job(job_dir, stage="Finding the live stream")
-    # Live streams come as combined audio+video HLS, which FFmpeg can record directly.
-    info = extract(live_url(url), "b[height<=1080]/b")
+    info = extract(live_url(url), "bv*[height<=1080]+ba/b[height<=1080]/b")
     if not info.get("is_live"):
         raise RuntimeError(f"Not live right now (status: {info.get('live_status') or 'unknown'}).")
-    stream_url = info["url"]
+    formats = info.get("requested_formats") or [info]
+    stream_urls = [f["url"] for f in formats]
+    headers = formats[0].get("http_headers") or info.get("http_headers") or {}
     source = {**source_info(info, url), "creator": creator or info.get("uploader") or info.get("channel") or "unknown"}
     manifest = new_manifest(job_dir, source, permission)
     recording = job_dir / "recording.ts"
 
-    recorder = Recorder(stream_url, info.get("http_headers") or {}, recording, job_dir / "recorder.log")
+    recorder = Recorder(stream_urls, headers, recording, job_dir / "recorder.log")
     print(f"Recording {source['title']} by {source['creator']}")
     transcript = {"language": None, "segments": [], "words": []}
     processed = 0.0
