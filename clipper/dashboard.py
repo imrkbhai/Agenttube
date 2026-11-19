@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import threading
+import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,7 +20,8 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 from clipper.cli import CLIPS_DIR
-from clipper.download import ROOT
+from clipper.clone import load_blueprint
+from clipper.download import ROOT, _node_path
 from clipper.jobs import JOB_ID, new_job_id, now, read_json, update_job, write_json
 from clipper.live import STOP_FILE, live_status
 
@@ -30,8 +32,12 @@ CREATORS_FILE = CLIPS_DIR / "creators.json"
 CLIP_FILE = re.compile(r"^(short|long)_\d{2,3}\.mp4$")
 REVIEW_STATES = {"pending_review", "approved", "rejected"}
 ALLOWED_HOSTS = {f"{HOST}:{PORT}", f"localhost:{PORT}"}
+AGENT_PORT = int(os.getenv("AGENT_PORT", "3456"))
+AGENT_URL = f"http://127.0.0.1:{AGENT_PORT}"
+AGENT_LOG = CLIPS_DIR / "agent.log"
 
 _processes: dict[str, subprocess.Popen] = {}
+_agent: dict[str, subprocess.Popen] = {}
 _lock = threading.Lock()
 ACTIVE = ("queued", "running", "stopping")
 
@@ -148,15 +154,16 @@ def job_detail(job_id: str) -> dict:
     log = job_dir / "log.txt"
     tail = log.read_text(encoding="utf-8", errors="replace")[-4000:] if log.exists() else ""
     return {"job": job, "source": manifest.get("source"), "permission": manifest.get("permission"),
-            "clips": clips, "log": tail}
+            "clips": clips, "blueprint": load_blueprint(job_dir), "log": tail}
 
 
 def start_job(body: dict) -> dict:
     mode = body.get("mode")
-    if mode not in ("video", "live"):
-        raise BadRequest("mode must be video or live")
+    if mode not in ("video", "live", "clone"):
+        raise BadRequest("mode must be video, live or clone")
     url = _url(body)
-    permission = _text(body, "permission", 300, required=True)
+    permission = _text(body, "permission", 300, required=mode != "clone")
+    topic = _text(body, "topic", 300, required=mode == "clone")
     creator, niche = _text(body, "creator", 100), _text(body, "niche", 100)
     model = _text(body, "model", 40)
     if model and not re.fullmatch(r"[a-z0-9.\-]+", model):
@@ -168,9 +175,10 @@ def start_job(body: dict) -> dict:
     write_json(job_dir / "job.json", {"id": job_id, "created_at": now(), "kind": mode, "source_url": url,
                                        "creator": creator, "state": "queued", "stage": "Starting"})
 
-    command = [sys.executable, "-m", "clipper", url, f"--permission={permission}", f"--job-id={job_id}",
-               f"--out={CLIPS_DIR}",
+    command = [sys.executable, "-m", "clipper", url, f"--job-id={job_id}", f"--out={CLIPS_DIR}",
                f"--shorts={_int(body, 'shorts', 5, 0, 20)}", f"--long={_int(body, 'long', 1, 0, 5)}"]
+    if permission:
+        command.append(f"--permission={permission}")
     if creator:
         command.append(f"--creator={creator}")
     if niche:
@@ -179,6 +187,8 @@ def start_job(body: dict) -> dict:
         command.append(f"--model={model}")
     if mode == "live":
         command += ["--live", f"--live-shorts={_int(body, 'live_shorts', 1, 0, 5)}"]
+    if mode == "clone":
+        command += [f"--clone-topic={topic}", f"--variants={_int(body, 'variants', 3, 1, 10)}"]
 
     log = open(job_dir / "log.txt", "ab")
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1",
@@ -215,6 +225,46 @@ def review_clip(job_id: str, body: dict) -> None:
         review = read_json(job_dir / "review.json", {})
         review[file] = status
         write_json(job_dir / "review.json", review)
+
+
+# ── Automation Agent (the original Agenttube Node server) ─────────────────────────
+
+def agent_status() -> dict:
+    process = _agent.get("process")
+    status = {"url": AGENT_URL, "running": False, "managed": process is not None and process.poll() is None,
+              "ready": (ROOT / "node_modules" / "express").exists()}
+    try:
+        with urllib.request.urlopen(f"{AGENT_URL}/health", timeout=2) as response:
+            status.update(running=True, health=json.loads(response.read()))
+    except Exception:
+        pass
+    if AGENT_LOG.exists():
+        status["log"] = AGENT_LOG.read_text(encoding="utf-8", errors="replace")[-3000:]
+    return status
+
+
+def agent_start() -> dict:
+    if agent_status()["running"]:
+        return agent_status()
+    node = _node_path()
+    if not node:
+        raise BadRequest("Node.js was not found")
+    if not (ROOT / "node_modules" / "express").exists():
+        raise BadRequest("Run npm install in the agenttube folder first")
+    log = open(AGENT_LOG, "ab")
+    env = {**os.environ, "HOST": "127.0.0.1", "PORT": str(AGENT_PORT),
+           "NODE_OPTIONS": "--use-system-ca", "FORCE_COLOR": "0"}
+    _agent["process"] = subprocess.Popen([node, "index.js"], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env)
+    log.close()
+    return {"starting": True}
+
+
+def agent_stop() -> None:
+    process = _agent.pop("process", None)
+    if process is None or process.poll() is not None:
+        raise BadRequest("The agent was not started from this dashboard")
+    process.terminate()
+    process.wait(timeout=15)
 
 
 # ── HTTP ────────────────────────────────────────────────────────────────────
@@ -267,7 +317,10 @@ class Handler(BaseHTTPRequestHandler):
                 page = (WEB_DIR / "index.html").read_bytes()
                 return self._send(200, page, "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-                                                              "script-src 'self' 'unsafe-inline'; media-src 'self'"})
+                                                              "script-src 'self' 'unsafe-inline'; media-src 'self'; "
+                                                              f"frame-src http://127.0.0.1:{AGENT_PORT}"})
+            if path == "/api/agent":
+                return self._json(agent_status())
             if path == "/api/creators":
                 return self._json(load_creators())
             if path == "/api/jobs":
@@ -297,6 +350,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             if path == "/api/live-status":
                 return self._json(live_status(_url(body)))
+            if path == "/api/agent/start":
+                return self._json(agent_start())
+            if path == "/api/agent/stop":
+                agent_stop()
+                return self._json({"ok": True})
             if path == "/api/jobs":
                 return self._json(start_job(body))
             match = re.fullmatch(r"/api/jobs/([\w-]+)/(stop|review)", path)
@@ -364,6 +422,9 @@ def main() -> None:
         pass
     finally:
         server.server_close()
+        process = _agent.get("process")
+        if process is not None and process.poll() is None:
+            process.terminate()
 
 
 if __name__ == "__main__":

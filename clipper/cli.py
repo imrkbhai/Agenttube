@@ -12,6 +12,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from clipper.clone import run_clone
 from clipper.download import ROOT, fetch
 from clipper.jobs import new_job_id, new_manifest, now, read_json, render_clip, update_job, write_json
 from clipper.live import run_live
@@ -59,7 +60,7 @@ def run_video(args, job_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Turn a long video or live stream into review-ready clips.")
     parser.add_argument("source", help="Video URL, live stream / channel URL (with --live), or a local video file")
-    parser.add_argument("--permission", required=True,
+    parser.add_argument("--permission", default="",
                         help='Record of the creator\'s permission, e.g. "email from @creator 2026-11-19" or "CC BY licence"')
     parser.add_argument("--creator", help="Creator name, if it can't be read from the source")
     parser.add_argument("--shorts", type=int, default=5, help="Number of 9:16 Shorts (under 60 s)")
@@ -71,13 +72,18 @@ def main() -> None:
     parser.add_argument("--live-shorts", type=int, default=1,
                         help="Shorts to cut per window during the stream; 0 = only clip after it ends")
     parser.add_argument("--window", type=float, default=300, help="Seconds of stream per live analysis window")
+    parser.add_argument("--clone-topic", default="",
+                        help="Viral Clone: analyse the video's structure and write variants about this topic")
+    parser.add_argument("--variants", type=int, default=3, help="Number of script variants for --clone-topic")
     parser.add_argument("--out", default=str(CLIPS_DIR), help="Output folder")
     parser.add_argument("--job-id", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     load_dotenv(ROOT / ".env")
     args.permission = args.permission.strip()
-    if not args.permission:
+    args.clone_topic = args.clone_topic.strip()
+    # Clips reuse the creator's footage; a clone only studies its structure and reuses nothing.
+    if not args.permission and not args.clone_topic:
         parser.error("--permission must describe how you have the right to clip this video.")
     # The smaller model keeps transcription close to real time on a CPU.
     args.model = args.model or ("base" if args.live else "small")
@@ -87,12 +93,19 @@ def main() -> None:
     job_dir.mkdir(parents=True, exist_ok=True)
     if not read_json(job_dir / "job.json"):
         write_json(job_dir / "job.json", {"id": job_id, "created_at": now()})
-    update_job(job_dir, kind="live" if args.live else "video", source_url=args.source, creator=args.creator,
+    kind = "clone" if args.clone_topic else "live" if args.live else "video"
+    update_job(job_dir, kind=kind, source_url=args.source, creator=args.creator,
                permission=args.permission, niche=args.niche, state="running", pid=os.getpid(),
                options={"shorts": args.shorts, "long": args.long, "live_shorts": args.live_shorts,
                         "model": args.model, "window": args.window})
 
     try:
+        if args.clone_topic:
+            run_clone(args.source, job_dir, args.clone_topic, args.niche, max(1, min(args.variants, 10)),
+                      args.model, args.language)
+            update_job(job_dir, state="finished")
+            print(f"\nDone. Blueprint and variants saved in:\n   {job_dir / 'blueprint.json'}")
+            return
         if args.live:
             run_live(args.source, job_dir, args.permission, args.creator, args.live_shorts, args.shorts,
                      args.long, args.niche, args.model, args.language, args.window)

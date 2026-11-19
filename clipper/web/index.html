@@ -49,14 +49,28 @@
   .notice { font-size:12px; color:var(--muted); border-left:3px solid var(--accent); padding-left:8px; margin-top:10px; }
   .error { color:var(--bad); font-size:12px; min-height:16px; margin-top:6px; }
   .hidden { display:none; }
+  nav.tabs { display:flex; gap:4px; margin-left:20px; }
+  nav.tabs button { background:transparent; border:1px solid transparent; color:var(--muted); }
+  nav.tabs button.active { background:#232835; border-color:var(--line); color:var(--text); }
+  .blueprint .beat { border-left:3px solid var(--accent); padding:4px 10px; margin:8px 0; }
+  .variant { border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:12px; background:#12151b; }
+  .variant ol { margin:8px 0 0; padding-left:20px; }
+  .variant li { margin-bottom:6px; }
+  iframe.agent { width:100%; height:calc(100vh - 230px); min-height:500px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  main.single { grid-template-columns: 1fr; }
 </style>
 </head>
 <body>
 <header>
   <h1>Clip Studio</h1>
-  <span class="hint">Local dashboard · clips are saved for review, nothing is uploaded</span>
+  <nav class="tabs">
+    <button data-tab="studio" class="active">Clip Studio</button>
+    <button data-tab="clone">Viral Clone</button>
+    <button data-tab="agent">Automation Agent</button>
+  </nav>
+  <span class="hint" style="margin-left:auto">Local dashboard · nothing is uploaded without your approval</span>
 </header>
-<main>
+<main id="tab-studio">
   <div>
     <section>
       <h2>Creators</h2>
@@ -130,6 +144,57 @@
       <details style="margin-top:14px"><summary>Log</summary><pre class="log" id="log"></pre></details>
     </section>
   </div>
+</main>
+
+<main id="tab-clone" class="hidden">
+  <div>
+    <section>
+      <h2>Clone a viral video</h2>
+      <p class="muted" style="margin-top:0">Paste a video that performed well. It is transcribed on this computer, Gemini maps its structure (hook, beats, pacing, payoff), then writes new scripts that follow the same structure for your topic. Only the structure is reused — no footage or sentences.</p>
+      <form id="clone-form">
+        <label>Reference video link</label><input name="url" required placeholder="https://www.youtube.com/shorts/…">
+        <label>Your topic</label><input name="topic" required maxlength="300" placeholder="Why most traders blow their first account">
+        <div class="row">
+          <div><label>Niche</label><input name="niche" maxlength="100" placeholder="trading"></div>
+          <div><label>Variants</label><input name="variants" type="number" min="1" max="10" value="3"></div>
+        </div>
+        <label>Whisper model</label>
+        <select name="model"><option value="base">base — fastest</option><option value="small" selected>small — better accuracy</option></select>
+        <div class="row" style="margin-top:12px"><button class="primary" type="submit">Analyse and write variants</button></div>
+        <div class="error" id="clone-error"></div>
+      </form>
+      <p class="notice">Inspired by <a href="https://github.com/hypit-ai/hypit" target="_blank" rel="noopener" style="color:var(--accent)">Hypit</a>'s "clone any viral video" idea; this is an independent implementation.</p>
+    </section>
+    <section>
+      <h2>Clone jobs</h2>
+      <table><tbody id="clone-jobs"></tbody></table>
+      <p class="muted" id="no-clones">No clone jobs yet.</p>
+    </section>
+  </div>
+  <div>
+    <section id="clone-detail" class="hidden">
+      <h2 id="clone-title"></h2>
+      <p class="muted" id="clone-meta"></p>
+      <div id="clone-body"></div>
+      <details style="margin-top:14px"><summary>Log</summary><pre class="log" id="clone-log"></pre></details>
+    </section>
+  </div>
+</main>
+
+<main id="tab-agent" class="single hidden">
+  <section>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+      <h2 style="margin:0">YouTube Automation Agent</h2>
+      <span id="agent-badge"></span>
+      <span style="margin-left:auto"></span>
+      <button class="primary" id="agent-start">Start</button>
+      <button class="danger" id="agent-stop">Stop</button>
+      <a id="agent-open" target="_blank" rel="noopener"><button>Open in new window</button></a>
+    </div>
+    <p class="muted" id="agent-meta">The original Agenttube dashboard (from darkzOGx/youtube-automation-agent): channel strategy, AI video generation, review, scheduling, analytics. Generation and publishing stay disabled until you finish its Setup.</p>
+    <iframe class="agent hidden" id="agent-frame" title="Automation Agent"></iframe>
+    <details style="margin-top:10px"><summary>Agent log</summary><pre class="log" id="agent-log"></pre></details>
+  </section>
 </main>
 
 <script>
@@ -254,7 +319,9 @@ $('#job-form').addEventListener('submit', async (event) => {
 function when(iso) { return iso ? new Date(iso).toLocaleString() : ''; }
 
 async function loadJobs() {
-  const jobs = await api('/api/jobs');
+  const all = await api('/api/jobs');
+  const jobs = all.filter(job => job.kind !== 'clone');
+  renderCloneJobs(all.filter(job => job.kind === 'clone'));
   $('#no-jobs').classList.toggle('hidden', jobs.length > 0);
   $('#jobs').replaceChildren(...jobs.map(job => el('tr', {
       class: `job${job.id === selectedJob ? ' selected' : ''}`,
@@ -323,6 +390,109 @@ $('#stop-btn').addEventListener('click', async () => {
 loadCreators();
 loadJobs();
 setInterval(loadJobs, 4000);
+
+// ── tabs ──
+let activeTab = 'studio';
+document.querySelectorAll('nav.tabs button').forEach(button => button.addEventListener('click', () => {
+  activeTab = button.dataset.tab;
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === button));
+  for (const tab of ['studio', 'clone', 'agent']) $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
+  if (activeTab === 'agent') loadAgent();
+}));
+
+// ── viral clone ──
+let selectedClone = null;
+
+$('#clone-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  $('#clone-error').textContent = '';
+  try {
+    const job = await api('/api/jobs', { ...Object.fromEntries(new FormData(event.target)), mode: 'clone' });
+    selectedClone = job.id;
+    loadJobs();
+  } catch (error) { $('#clone-error').textContent = error.message; }
+});
+
+function renderCloneJobs(jobs) {
+  $('#no-clones').classList.toggle('hidden', jobs.length > 0);
+  $('#clone-jobs').replaceChildren(...jobs.map(job => el('tr', {
+      class: `job${job.id === selectedClone ? ' selected' : ''}`,
+      onclick: () => { selectedClone = job.id; loadJobs(); }
+    },
+    el('td', {}, el('div', { textContent: job.title || job.source_url || '' }),
+      el('div', { class: 'muted', textContent: when(job.created_at) })),
+    el('td', {}, badge(job.state || 'unknown'), el('div', { class: 'muted', textContent: job.stage || '' })),
+  )));
+  if (selectedClone) loadCloneDetail();
+}
+
+async function loadCloneDetail() {
+  let data;
+  try { data = await api(`/api/jobs/${selectedClone}`); } catch { return; }
+  const { job, blueprint } = data;
+  $('#clone-detail').classList.remove('hidden');
+  $('#clone-title').textContent = job.title || job.source_url;
+  $('#clone-meta').textContent = [job.stage, job.error && `error: ${job.error}`].filter(Boolean).join(' · ');
+  $('#clone-log').textContent = data.log;
+  const body = $('#clone-body');
+  if (!blueprint) { body.replaceChildren(); return; }
+  if (body.dataset.job === selectedClone) return;
+  body.dataset.job = selectedClone;
+  const bp = blueprint.blueprint || {};
+  const text = (value) => Array.isArray(value) ? value.join(' · ') : (value && typeof value === 'object' ? Object.values(value).join(' · ') : String(value ?? ''));
+  body.replaceChildren(
+    el('div', { class: 'blueprint' },
+      el('h2', { textContent: 'Blueprint' }),
+      el('p', { textContent: text(bp.summary) }),
+      el('p', { class: 'muted', textContent: `Hook: ${text(bp.hook)}` }),
+      ...(bp.beats || []).map(beat => el('div', { class: 'beat' },
+        el('strong', { textContent: `${text(beat.role)} (${Math.round(beat.start || 0)}–${Math.round(beat.end || 0)}s)` }),
+        el('div', { textContent: text(beat.summary) }),
+        el('div', { class: 'muted', textContent: text(beat.technique) }))),
+      el('p', { class: 'muted', textContent: `Pacing: ${text(bp.pacing)}` }),
+      el('p', { class: 'muted', textContent: `Captions: ${text(bp.captions)} · Visuals: ${text(bp.visuals)}` }),
+      el('p', { class: 'muted', textContent: `CTA: ${text(bp.cta)} · Why it works: ${text(bp.why_it_works)}` })),
+    el('h2', { textContent: `Variants for "${blueprint.topic}"` }),
+    ...(blueprint.variants || []).map((variant, index) => el('div', { class: 'variant' },
+      el('div', { class: 'title', textContent: `${index + 1}. ${text(variant.title)}` }),
+      el('div', { class: 'muted', textContent: `Hook: ${text(variant.hook)}` }),
+      el('ol', {}, ...(variant.script || []).map(line => el('li', {},
+        el('div', { textContent: text(line.narration) }),
+        el('div', { class: 'muted', textContent: `${text(line.beat)} · on screen: ${text(line.on_screen_text)} · visual: ${text(line.visual)}` })))),
+      el('div', { class: 'muted', textContent: `CTA: ${text(variant.cta)} · Tags: ${text(variant.tags)}` }),
+      el('button', { class: 'small', textContent: 'Copy script', onclick: () => navigator.clipboard.writeText(
+        [variant.title, '', ...(variant.script || []).map(line => line.narration), '', variant.cta].join('\n')) }))));
+}
+
+// ── automation agent ──
+async function loadAgent() {
+  const status = await api('/api/agent');
+  $('#agent-open').href = status.url;
+  const health = status.health || {};
+  $('#agent-badge').replaceChildren(status.running
+    ? badge(health.setupRequired ? 'running · setup required' : 'running', 'finished')
+    : badge(status.ready ? 'stopped' : 'npm install needed', 'stopped'));
+  $('#agent-start').classList.toggle('hidden', status.running);
+  $('#agent-stop').classList.toggle('hidden', !status.managed);
+  $('#agent-log').textContent = status.log || '';
+  const frame = $('#agent-frame');
+  frame.classList.toggle('hidden', !status.running);
+  if (status.running && frame.dataset.loaded !== '1') { frame.src = status.url; frame.dataset.loaded = '1'; }
+  if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
+}
+
+$('#agent-start').addEventListener('click', async () => {
+  try { await api('/api/agent/start', {}); } catch (error) { alert(error.message); }
+  for (let i = 0; i < 60; i++) { await new Promise(r => setTimeout(r, 1500)); await loadAgent(); if (!$('#agent-frame').classList.contains('hidden')) break; }
+});
+
+$('#agent-stop').addEventListener('click', async () => {
+  if (!confirm('Stop the Automation Agent? Its scheduled jobs stop too.')) return;
+  try { await api('/api/agent/stop', {}); } catch (error) { alert(error.message); }
+  loadAgent();
+});
+
+setInterval(() => { if (activeTab === 'agent') loadAgent(); }, 8000);
 </script>
 </body>
 </html>

@@ -110,6 +110,10 @@ npm run clip:dashboard   # then open http://127.0.0.1:8765
 
 **Live streams.** Live mode records the stream from now on and transcribes it in 5-minute windows while it plays, cutting Shorts as highlights happen (`--live-shorts`, 0 = only after the stream). When the stream ends or you press **Stop**, long clips are made from the full recording. It uses the faster `base` Whisper model by default to keep up on a CPU.
 
+**Viral Clone tab.** Paste a video that performed well and a topic: it is transcribed locally, Gemini maps its structure (hook, beats, pacing, payoff, CTA) and writes new scripts that follow the same structure for your topic. Only the structure is reused, never footage or sentences, and the downloaded audio is deleted afterwards. Inspired by [Hypit](https://github.com/hypit-ai/hypit)'s "clone any viral video" idea; independently implemented. CLI: `npm run clip -- <url> --clone-topic "your topic" --variants 3`.
+
+**Automation Agent tab.** Starts, stops and embeds this repository's original YouTube Automation Agent dashboard (port 3456) so both tools are in one window. It needs `npm install` and stays in setup mode until you finish its Setup.
+
 The same jobs run from the command line:
 
 ```bash
