@@ -4,6 +4,8 @@ node_modules/
 .venv-clipper/
 .venv-studio/
 .venv-peakcut/
+moneyprinterturbo/.venv/
+moneyprinterturbo-data/
 peakcut-data/
 __pycache__/
 npm-debug.log*

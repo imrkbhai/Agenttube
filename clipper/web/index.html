@@ -8,8 +8,8 @@
   :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e7e9ee; --muted:#8b93a7; --accent:#ffd400; --ok:#2ecc71; --bad:#ff5c5c; --live:#ff3b3b; }
   * { box-sizing: border-box; }
   body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
-  header { display:flex; align-items:center; gap:12px; padding:14px 24px; border-bottom:1px solid var(--line); }
-  header h1 { margin:0; font-size:18px; }
+  header { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"brand socials" "tabs tabs"; align-items:center; column-gap:16px; row-gap:8px; padding:10px 24px; border-bottom:1px solid var(--line); }
+  header h1 { grid-area:brand; margin:0; font-size:18px; }
   header .hint { color:var(--muted); font-size:12px; }
   main { display:grid; grid-template-columns: 380px 1fr; gap:20px; padding:20px 24px; }
   section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:20px; }
@@ -49,7 +49,8 @@
   .notice { font-size:12px; color:var(--muted); border-left:3px solid var(--accent); padding-left:8px; margin-top:10px; }
   .error { color:var(--bad); font-size:12px; min-height:16px; margin-top:6px; }
   .hidden { display:none; }
-  nav.tabs { display:flex; gap:4px; margin-left:20px; }
+  nav.tabs { grid-area:tabs; display:flex; gap:4px; min-width:0; margin:0; overflow-x:auto; white-space:nowrap; scrollbar-width:none; }
+  nav.tabs::-webkit-scrollbar { display:none; }
   nav.tabs button { background:transparent; border:1px solid transparent; color:var(--muted); }
   nav.tabs button.active { background:#232835; border-color:var(--line); color:var(--text); }
   .blueprint .beat { border-left:3px solid var(--accent); padding:4px 10px; margin:8px 0; }
@@ -58,7 +59,98 @@
   .variant li { margin-bottom:6px; }
   iframe.agent { width:100%; height:calc(100vh - 230px); min-height:500px; border:1px solid var(--line); border-radius:8px; background:#fff; }
   iframe.video-studio { width:100%; height:calc(100vh - 300px); min-height:600px; border:1px solid var(--line); border-radius:8px; background:#09090f; }
-  iframe.peakcut { width:100%; height:calc(100vh - 300px); min-height:650px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  iframe.moneyprinterturbo { width:100%; height:calc(100vh - 300px); min-height:650px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  #tab-studio {
+    --bg:#fff; --panel:#fff; --line:#eee8e4; --text:#211813; --muted:#6d6159;
+    --accent:#ff8b33; --ok:#0f8a57; --bad:#d3343f; --live:#e5323f;
+    grid-template-columns:minmax(0,1fr); gap:12px; padding:14px 24px; color:#211813; color-scheme:light;
+  }
+  #tab-studio section { background:#fff; border-color:#eee8e4; border-radius:12px; padding:20px; margin-bottom:16px; }
+  #tab-studio .studio-composer { max-width:1120px; margin:0 auto 8px; padding:16px; border-radius:12px; }
+  #tab-studio #studio-view-home > section { width:100%; max-width:1120px; margin-left:auto; margin-right:auto; }
+  #tab-studio .studio-subnav { display:flex; gap:4px; width:min(100%,1120px); margin:0 auto; border-bottom:1px solid #eee8e4; }
+  #tab-studio .studio-subnav button { min-height:36px; padding:0 14px; border:0; border-bottom:2px solid transparent; border-radius:6px 6px 0 0; background:transparent; color:#6d6159; }
+  #tab-studio .studio-subnav button.active { border-bottom-color:#ff8b33; background:#fff7f1; color:#211813; }
+  #tab-studio .studio-view { min-width:0; }
+  #tab-studio .studio-hero { text-align:center; margin:0 auto 14px; }
+  #tab-studio .studio-hero h2 { font-size:24px; line-height:1.2; margin-bottom:4px; }
+  #tab-studio .studio-hero p { color:#6d6159; font-size:14px; margin:0; }
+  #tab-studio .studio-source { border:1px solid #e1d9d3; border-radius:14px; overflow:hidden; }
+  #tab-studio .studio-url { position:relative; }
+  #tab-studio .studio-url input { height:48px; min-height:48px; border:0; border-radius:0; padding:0 16px; font-size:15px; }
+  #tab-studio .studio-url input:focus { outline:0; box-shadow:inset 0 0 0 2px #ff8b33; }
+  #tab-studio .studio-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 8px 8px; }
+  #tab-studio .studio-controls > button, #tab-studio .studio-options > summary { min-height:36px; padding:0 12px; border:0; border-radius:999px; background:#f7f4f1; color:#6d6159; white-space:nowrap; }
+  #tab-studio .studio-controls > button:hover, #tab-studio .studio-options > summary:hover { background:#fff2e8; color:#2a1a12; }
+  #tab-studio .studio-controls > button.primary { margin-left:auto; padding:0 18px; border-color:#ff8b33; border-radius:9px; background:#ff8b33; color:#2a1a12; font-size:14px; }
+  #tab-studio .studio-controls > button.primary:hover { border-color:#f27a1f; background:#f27a1f; }
+  #tab-studio .studio-controls select[name=creator_id] { width:180px; min-height:36px; border:0; border-radius:999px; background:#f7f4f1; }
+  #tab-studio .studio-options { position:relative; }
+  #tab-studio .studio-options > summary { display:flex; align-items:center; cursor:pointer; list-style:none; }
+  #tab-studio .studio-options > summary::-webkit-details-marker { display:none; }
+  #tab-studio .studio-options[open] { flex:1 0 100%; }
+  #tab-studio .studio-options-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; padding:14px 4px 4px; }
+  #tab-studio .studio-options-grid .row { align-items:end; }
+  #tab-studio .studio-options-grid .row > div { min-width:0; }
+  #tab-studio .studio-drop { flex:1; min-width:140px; color:#a0948c; font-size:12px; text-align:right; }
+  #tab-studio .studio-upload-status { min-height:0; padding:0 12px; color:#6d6159; font-size:12px; }
+  #tab-studio .studio-upload-status:not(:empty) { min-height:18px; padding:2px 12px 6px; }
+  #tab-studio .studio-source.drag-over { border-color:#ff8b33; background:#fff7f1; }
+  #tab-studio .studio-columns { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); gap:16px; }
+  #tab-studio .studio-columns > div { min-width:0; }
+  #tab-studio .job-table-wrap { overflow-x:auto; }
+  #tab-studio .job-table-wrap table { min-width:620px; }
+  #tab-studio .job-stage { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #tab-studio tr.job:focus-visible { outline:2px solid #ff8b33; outline-offset:-2px; }
+  #tab-studio h2 { color:#2a1a12; }
+  #tab-studio label { color:#6d6159; font-weight:600; }
+  #tab-studio input, #tab-studio select, #tab-studio textarea {
+    min-height:40px; background:#fff; color:#211813; border-color:#e1d9d3; border-radius:8px; padding:8px 12px;
+  }
+  #tab-studio input:focus, #tab-studio select:focus, #tab-studio textarea:focus { border-color:#ff8b33; outline:2px solid #ffd9bc; }
+  #tab-studio button { min-height:36px; border-color:#e1d9d3; border-radius:9px; background:#fff; color:#211813; }
+  #tab-studio button:hover { border-color:#ffb27a; background:#fff7f1; }
+  #tab-studio button.primary { border-color:#ff8b33; background:#ff8b33; color:#2a1a12; }
+  #tab-studio button.primary:hover { border-color:#f27a1f; background:#f27a1f; }
+  #tab-studio button.danger { border-color:transparent; background:#fdecee; color:#d3343f; }
+  #tab-studio .creator, #tab-studio .clip { border-color:#eee8e4; border-radius:10px; background:#fff; }
+  #tab-studio .creator { padding:12px; }
+  #tab-studio .badge { background:#f7f4f1; color:#6d6159; }
+  #tab-studio .badge.running, #tab-studio .badge.queued, #tab-studio .badge.stopping { background:#fff2e8; color:#a9480a; }
+  #tab-studio .badge.finished, #tab-studio .badge.approved { background:#e6f6ee; color:#0f8a57; }
+  #tab-studio .badge.failed, #tab-studio .badge.stopped, #tab-studio .badge.rejected { background:#fdecee; color:#d3343f; }
+  #tab-studio pre.log { background:#f7f4f1; border-color:#eee8e4; color:#211813; }
+  #tab-studio .notice { border-color:#ff8b33; color:#6d6159; }
+  #tab-studio .muted, #tab-studio th { color:#6d6159; }
+  #tab-studio tr.job:hover { background:#fff7f1; }
+  #tab-studio tr.job.selected { background:#fff2e8; }
+  #tab-studio th:last-child, #tab-studio td:last-child { white-space:nowrap; font-size:12px; }
+  .social-links { grid-area:socials; display:flex; align-items:center; justify-self:end; gap:6px; min-width:0; }
+  .social-links a { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:32px; padding:0 10px; border:1px solid #e1d9d3; border-radius:9px; background:#fff; color:#211813; font-size:12px; font-weight:600; text-decoration:none; white-space:nowrap; }
+  .social-links a:hover { border-color:#ffb27a; background:#fff7f1; }
+  .social-links a.instagram { border-color:#ff8b33; background:#ff8b33; color:#2a1a12; }
+  .social-links a.instagram:hover { border-color:#f27a1f; background:#f27a1f; }
+  .social-links svg { width:16px; height:16px; flex:none; fill:currentColor; }
+  nav.tabs button { flex:0 0 auto; white-space:nowrap; }
+  @media (max-width: 1100px) {
+    header { padding:12px 16px; }
+    #tab-studio .studio-columns { grid-template-columns:1fr; }
+  }
+  @media (max-width: 640px) {
+    #tab-studio { padding:12px; }
+    .social-links { gap:4px; }
+    .social-links a { min-height:30px; gap:4px; padding:0 8px; font-size:11px; }
+    .social-links svg { width:15px; height:15px; }
+    #tab-studio .studio-composer { padding:12px; }
+    #tab-studio .studio-hero h2 { font-size:21px; }
+    #tab-studio .studio-url input { height:44px; min-height:44px; }
+    #tab-studio .studio-controls > button.primary { margin-left:0; width:100%; }
+    #tab-studio .studio-drop { text-align:left; }
+  }
+  @media (max-width: 380px) {
+    header { grid-template-columns:1fr; grid-template-areas:"brand" "socials" "tabs"; row-gap:8px; }
+    .social-links { justify-self:start; }
+  }
   @media (max-width: 640px) { #tab-clone { grid-template-columns: 1fr; } }
   main.single { grid-template-columns: 1fr; }
 </style>
@@ -71,12 +163,67 @@
     <button data-tab="clone">Viral Clone &amp; Create</button>
     <button data-tab="agent">Automation Agent</button>
     <button data-tab="video">Video Studio</button>
-    <button data-tab="peakcut">PeakCut</button>
+    <button data-tab="moneyprinterturbo">MoneyPrinterTurbo</button>
   </nav>
-  <span class="hint" style="margin-left:auto">Local dashboard · nothing is uploaded without your approval</span>
+  <div class="social-links" aria-label="Agenttube social links">
+    <a href="https://github.com/imrkbhai/Agenttube" target="_blank" rel="noopener" title="Open Agenttube on GitHub">
+      <svg viewBox="0 0 256 256" aria-hidden="true"><path transform="scale(16)" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      <span>GitHub</span>
+    </a>
+    <a href="https://x.com/imd_rky" target="_blank" rel="noopener" title="Follow on X">
+      <svg viewBox="0 0 256 256" aria-hidden="true"><path transform="scale(10.667)" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.64 7.584H.473l8.6-9.83L0 1.154h7.594l5.243 6.932zm-1.29 19.494h2.039L6.486 3.24H4.298z"/></svg>
+      <span>X</span>
+    </a>
+    <a class="instagram" href="https://www.instagram.com/imd_rky/" target="_blank" rel="noopener" title="Instagram">
+      <svg viewBox="0 0 256 256" aria-hidden="true"><rect x="32" y="32" width="192" height="192" rx="56" fill="none" stroke="currentColor" stroke-width="18"/><circle cx="128" cy="128" r="42" fill="none" stroke="currentColor" stroke-width="18"/><circle cx="184" cy="72" r="13"/></svg>
+      <span>Instagram</span>
+    </a>
+  </div>
 </header>
 <main id="tab-studio">
-  <div>
+  <nav class="studio-subnav" aria-label="Clip Studio sections">
+    <button type="button" class="active" data-studio-view="home" aria-current="page">Home</button>
+    <button type="button" data-studio-view="videos">All Videos</button>
+  </nav>
+
+  <div id="studio-view-home" class="studio-view">
+    <section class="studio-composer">
+      <div class="studio-hero">
+        <h2>What do you want to clip today?</h2>
+        <p>Paste a link or upload a video. Your clips come back captioned and ready to review.</p>
+      </div>
+      <form id="job-form">
+        <div class="studio-source">
+          <div class="studio-url"><input name="url" type="url" placeholder="Paste a YouTube, Twitch or Kick video link" required aria-label="Video, stream, or channel link"></div>
+          <input id="studio-upload-file" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,video/x-msvideo,.m4v" hidden>
+          <div class="studio-controls">
+            <button type="button" id="studio-upload-button">Upload video</button>
+            <select name="creator_id" aria-label="Creator"><option value="">No creator</option></select>
+            <details class="studio-options" id="studio-options">
+              <summary>Options</summary>
+              <div class="studio-options-grid">
+                <label>Mode<select name="mode"><option value="video">Video (published or finished stream)</option><option value="live">Live stream (record and clip)</option></select></label>
+                <label>Permission record<input name="permission" maxlength="300" placeholder="How you have permission to clip"></label>
+                <label>Creator name<input name="creator" maxlength="100"></label>
+                <label>Niche<input name="niche" maxlength="100"></label>
+                <div class="row">
+                  <div><label>Shorts<input name="shorts" type="number" min="0" max="20" value="5"></label></div>
+                  <div><label>Long clips<input name="long" type="number" min="0" max="5" value="1"></label></div>
+                  <div class="live-only hidden"><label>Shorts / 5 min live<input name="live_shorts" type="number" min="0" max="5" value="1"></label></div>
+                </div>
+                <label>Whisper model<select name="model"><option value="">Default (small, base for live)</option><option value="base">base — fastest</option><option value="small">small — better accuracy</option><option value="medium">medium — slow on CPU</option></select></label>
+                <p class="notice live-only hidden">Live mode records from now on. Shorts are cut every 5 minutes; when the stream ends or you press Stop, long clips are made from the full recording.</p>
+              </div>
+            </details>
+            <span class="studio-drop">or drop a video file here</span>
+            <button class="primary" type="submit">Make clips</button>
+          </div>
+          <div id="studio-upload-status" class="studio-upload-status" role="status" aria-live="polite"></div>
+        </div>
+        <div class="error" id="job-error"></div>
+      </form>
+    </section>
+
     <section>
       <h2>Creators</h2>
       <div id="creators"></div>
@@ -93,50 +240,18 @@
         </form>
       </details>
     </section>
-
-    <section>
-      <h2>New clipping job</h2>
-      <form id="job-form">
-        <label>Mode</label>
-        <select name="mode">
-          <option value="video">Video (published or finished stream)</option>
-          <option value="live">Live stream (record and clip while it plays)</option>
-        </select>
-        <label>Creator</label>
-        <select name="creator_id"><option value="">— manual —</option></select>
-        <label>Video, stream, or channel link</label><input name="url" required placeholder="https://www.youtube.com/watch?v=…">
-        <label>Permission record</label><input name="permission" required maxlength="300">
-        <div class="row">
-          <div><label>Creator name</label><input name="creator" maxlength="100"></div>
-          <div><label>Niche</label><input name="niche" maxlength="100"></div>
-        </div>
-        <div class="row">
-          <div><label>Shorts</label><input name="shorts" type="number" min="0" max="20" value="5"></div>
-          <div><label>Long (7–10 min)</label><input name="long" type="number" min="0" max="5" value="1"></div>
-          <div class="live-only hidden"><label>Shorts / 5 min live</label><input name="live_shorts" type="number" min="0" max="5" value="1"></div>
-        </div>
-        <label>Whisper model</label>
-        <select name="model">
-          <option value="">Default (small, base for live)</option>
-          <option value="base">base — fastest</option>
-          <option value="small">small — better accuracy</option>
-          <option value="medium">medium — slow on CPU</option>
-        </select>
-        <p class="notice live-only hidden">Live mode records from now on. Shorts are cut every 5 minutes; when the stream ends or you press Stop, long clips are made from the full recording. Set "Shorts / 5 min live" to 0 to clip only after the stream ends.</p>
-        <div class="row" style="margin-top:12px"><button class="primary" type="submit">Start clipping</button></div>
-        <div class="error" id="job-error"></div>
-      </form>
-    </section>
   </div>
 
-  <div>
+  <div id="studio-view-videos" class="studio-view hidden">
     <section>
-      <h2>Jobs</h2>
-      <table>
-        <thead><tr><th>Started</th><th>Type</th><th>Source</th><th>Status</th><th>Clips</th></tr></thead>
-        <tbody id="jobs"></tbody>
-      </table>
-      <p class="muted" id="no-jobs">No jobs yet.</p>
+      <h2>All Videos</h2>
+      <div class="job-table-wrap">
+        <table>
+          <thead><tr><th>Started</th><th>Type</th><th>Source</th><th>Status</th><th>Clips</th></tr></thead>
+          <tbody id="jobs"></tbody>
+        </table>
+      </div>
+      <p class="muted" id="no-jobs">No videos yet.</p>
     </section>
 
     <section id="detail" class="hidden">
@@ -149,6 +264,7 @@
       <details style="margin-top:14px"><summary>Log</summary><pre class="log" id="log"></pre></details>
     </section>
   </div>
+
 </main>
 
 <main id="tab-clone" class="hidden">
@@ -237,8 +353,6 @@
       <h2 style="margin:0">YouTube Automation Agent</h2>
       <span id="agent-badge"></span>
       <span style="margin-left:auto"></span>
-      <button class="primary" id="agent-start">Start</button>
-      <button class="danger" id="agent-stop">Stop</button>
       <a id="agent-open" target="_blank" rel="noopener"><button>Open in new window</button></a>
     </div>
     <p class="muted" id="agent-meta">The original Agenttube dashboard (from darkzOGx/youtube-automation-agent): channel strategy, AI video generation, review, scheduling, analytics. Generation and publishing stay disabled until you finish its Setup.</p>
@@ -253,8 +367,6 @@
       <h2 style="margin:0">Original Video Studio</h2>
       <span id="video-studio-badge"></span>
       <span style="margin-left:auto"></span>
-      <button class="primary" id="video-studio-start">Start</button>
-      <button class="danger" id="video-studio-stop">Stop</button>
       <a id="video-studio-open" target="_blank" rel="noopener"><button>Open in new window</button></a>
     </div>
     <p class="muted" id="video-studio-meta">Research, script, narrate, render, edit metadata, and review in the original-video workflow. Upload remains a separate action inside the studio.</p>
@@ -263,19 +375,18 @@
   </section>
 </main>
 
-<main id="tab-peakcut" class="single hidden">
+<main id="tab-moneyprinterturbo" class="single hidden">
   <section>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-      <h2 style="margin:0">PeakCut</h2>
-      <span id="peakcut-badge"></span>
+      <h2 style="margin:0">MoneyPrinterTurbo</h2>
+      <span id="mpt-badge"></span>
       <span style="margin-left:auto"></span>
-      <button class="primary" id="peakcut-start">Start</button>
-      <button class="danger" id="peakcut-stop">Stop</button>
-      <button id="peakcut-open" type="button">Open /app separately</button>
+      <button id="mpt-open" type="button">Open separately</button>
     </div>
-    <p class="muted">PeakCut's original dashboard, running locally with its own data folder. First startup may download its speech model (about 480 MB).</p>
-    <iframe class="peakcut hidden" id="peakcut-frame" title="PeakCut" allow="autoplay; fullscreen"></iframe>
-    <details style="margin-top:10px"><summary>PeakCut log</summary><pre class="log" id="peakcut-log"></pre></details>
+    <p class="muted" id="mpt-meta">Generate videos from a topic or script with configurable footage, narration, subtitles and music. Provider charges and publishing are controlled in MoneyPrinterTurbo.</p>
+    <div id="mpt-setup" class="notice hidden">Install the upstream source and its isolated environment first. See the MoneyPrinterTurbo section in README.md. Keep its credentials and generated files in the dedicated moneyprinterturbo-data folder.</div>
+    <iframe class="moneyprinterturbo hidden" id="mpt-frame" title="MoneyPrinterTurbo"></iframe>
+    <details style="margin-top:10px"><summary>MoneyPrinterTurbo log</summary><pre class="log" id="mpt-log"></pre></details>
   </section>
 </main>
 
@@ -284,6 +395,22 @@ const $ = (sel) => document.querySelector(sel);
 let creators = [];
 let selectedJob = null;
 const renderedClips = new Map();
+
+function showStudioView(view) {
+  document.querySelectorAll('.studio-subnav button').forEach(button => {
+    const active = button.dataset.studioView === view;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+  document.querySelectorAll('.studio-view').forEach(panel => {
+    panel.classList.toggle('hidden', panel.id !== `studio-view-${view}`);
+  });
+}
+
+document.querySelectorAll('.studio-subnav button').forEach(button => {
+  button.addEventListener('click', () => showStudioView(button.dataset.studioView));
+});
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -369,6 +496,7 @@ $('#creator-form').addEventListener('submit', async (event) => {
 // ── jobs ──
 function fillJob(creator, mode, url) {
   const form = $('#job-form');
+  showStudioView('home');
   form.mode.value = mode; form.creator_id.value = creator.id; form.url.value = url;
   form.permission.value = creator.permission; form.creator.value = creator.name; form.niche.value = creator.niche || '';
   toggleLive();
@@ -378,6 +506,8 @@ function fillJob(creator, mode, url) {
 function toggleLive() {
   const live = $('#job-form [name=mode]').value === 'live';
   document.querySelectorAll('.live-only').forEach(node => node.classList.toggle('hidden', !live));
+  $('#studio-upload-button').disabled = live;
+  $('#studio-upload-button').title = live ? 'Upload is for finished videos; use a channel link to record live.' : '';
 }
 $('#job-form [name=mode]').addEventListener('change', toggleLive);
 $('#job-form [name=creator_id]').addEventListener('change', (event) => {
@@ -391,14 +521,100 @@ $('#job-form').addEventListener('submit', async (event) => {
   $('#job-error').textContent = '';
   const data = Object.fromEntries(new FormData(event.target));
   delete data.creator_id;
+  if (!data.permission.trim()) {
+    $('#studio-options').open = true;
+    $('#job-error').textContent = 'Add a permission record in Options before making clips.';
+    $('#job-form [name=permission]').focus();
+    return;
+  }
   try {
     const job = await api('/api/jobs', data);
     selectedJob = job.id;
-    loadJobs();
+    showStudioView('videos');
+    await loadJobs();
   } catch (error) { $('#job-error').textContent = error.message; }
 });
 
+async function uploadJobFile(file) {
+  const form = $('#job-form');
+  const data = Object.fromEntries(new FormData(form));
+  if (data.mode === 'live') {
+    $('#job-error').textContent = 'Choose a finished video to upload. Use a channel link for live clipping.';
+    return;
+  }
+  if (!data.permission.trim()) {
+    $('#studio-options').open = true;
+    $('#job-error').textContent = 'Add a permission record in Options before making clips.';
+    $('#job-form [name=permission]').focus();
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024 * 1024) {
+    $('#job-error').textContent = 'Videos must be 4 GB or smaller.';
+    return;
+  }
+
+  delete data.url;
+  delete data.creator_id;
+  data.filename = file.name;
+  const query = new URLSearchParams(data);
+  const button = $('#studio-upload-button');
+  const submit = $('#job-form button[type=submit]');
+  button.disabled = submit.disabled = true;
+  $('#job-error').textContent = '';
+  $('#studio-upload-status').textContent = `Uploading ${file.name}…`;
+  try {
+    const response = await fetch(`/api/upload?${query}`, {
+      method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || response.statusText);
+    selectedJob = result.id;
+    showStudioView('videos');
+    $('#studio-upload-status').textContent = `Upload received. Clipping ${file.name}.`;
+    await loadJobs();
+  } catch (error) {
+    $('#job-error').textContent = error.message;
+    $('#studio-upload-status').textContent = '';
+  } finally {
+    $('#studio-upload-file').value = '';
+    button.disabled = form.mode.value === 'live';
+    submit.disabled = false;
+  }
+}
+
+$('#studio-upload-button').addEventListener('click', () => $('#studio-upload-file').click());
+$('#studio-upload-file').addEventListener('change', event => {
+  const file = event.target.files[0];
+  if (file) uploadJobFile(file);
+});
+
+const studioSource = $('.studio-source');
+studioSource.addEventListener('dragover', event => { event.preventDefault(); studioSource.classList.add('drag-over'); });
+studioSource.addEventListener('dragleave', event => {
+  if (!studioSource.contains(event.relatedTarget)) studioSource.classList.remove('drag-over');
+});
+studioSource.addEventListener('drop', event => {
+  event.preventDefault();
+  studioSource.classList.remove('drag-over');
+  const file = [...event.dataTransfer.files].find(item => item.type.startsWith('video/') || /\.(avi|m4v|mkv)$/i.test(item.name));
+  if (file) uploadJobFile(file);
+  else $('#job-error').textContent = 'Drop a supported video file to upload.';
+});
+
 function when(iso) { return iso ? new Date(iso).toLocaleString() : ''; }
+
+function jobStep(job) {
+  if (!['running', 'queued'].includes(job.state)) return job.stage || '';
+  const stages = [
+    ['Getting the video', 'Getting source'],
+    ['Transcribing', 'Transcribing'],
+    ['Picking moments', 'Selecting clips'],
+    ['Rendering', 'Rendering clips'],
+  ];
+  const stage = (job.stage || '').toLowerCase();
+  const index = stages.findIndex(([name]) => stage.includes(name.toLowerCase()));
+  return index < 0 ? job.stage || '' : `Step ${index + 1} of ${stages.length} · ${stages[index][1]}`;
+}
 
 async function loadJobs() {
   const all = await api('/api/jobs');
@@ -407,13 +623,21 @@ async function loadJobs() {
   $('#no-jobs').classList.toggle('hidden', jobs.length > 0);
   $('#jobs').replaceChildren(...jobs.map(job => el('tr', {
       class: `job${job.id === selectedJob ? ' selected' : ''}`,
-      onclick: () => { selectedJob = job.id; loadJobs(); }
+      tabIndex: 0,
+      onclick: () => { selectedJob = job.id; loadJobs(); },
+      onkeydown: event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          selectedJob = job.id;
+          loadJobs();
+        }
+      }
     },
     el('td', { textContent: when(job.created_at) }),
     el('td', {}, job.kind === 'live' ? badge('live', 'live') : badge('video', '')),
     el('td', {}, el('div', { textContent: job.title || job.source_url || '' }),
       el('div', { class: 'muted', textContent: job.creator || '' })),
-    el('td', {}, badge(job.state || 'unknown'), el('div', { class: 'muted', textContent: job.stage || '' })),
+    el('td', {}, badge(job.state || 'unknown'), el('div', { class: 'muted job-stage', textContent: jobStep(job), title: job.stage || '' })),
     el('td', { textContent: `${job.counts.total} (${job.counts.approved} ✓ ${job.counts.rejected} ✗)` }),
   )));
   if (selectedJob) loadDetail();
@@ -478,10 +702,10 @@ let activeTab = 'studio';
 document.querySelectorAll('nav.tabs button').forEach(button => button.addEventListener('click', () => {
   activeTab = button.dataset.tab;
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === button));
-  for (const tab of ['studio', 'clone', 'agent', 'video', 'peakcut']) $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
+  for (const tab of ['studio', 'clone', 'agent', 'video', 'moneyprinterturbo']) $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
   if (activeTab === 'agent') loadAgent();
   if (activeTab === 'video') loadVideoStudio();
-  if (activeTab === 'peakcut') startPeakcutWhenReady().catch(error => alert(error.message));
+  if (activeTab === 'moneyprinterturbo') startMptWhenReady().catch(error => alert(error.message));
 }));
 
 // ── viral clone ──
@@ -622,25 +846,12 @@ async function loadAgent() {
   $('#agent-badge').replaceChildren(status.running
     ? badge(health.setupRequired ? 'running · setup required' : 'running', 'finished')
     : badge(status.ready ? 'stopped' : 'npm install needed', 'stopped'));
-  $('#agent-start').classList.toggle('hidden', status.running);
-  $('#agent-stop').classList.toggle('hidden', !status.managed);
   $('#agent-log').textContent = status.log || '';
   const frame = $('#agent-frame');
   frame.classList.toggle('hidden', !status.running);
   if (status.running && frame.dataset.loaded !== '1') { frame.src = status.url; frame.dataset.loaded = '1'; }
   if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
 }
-
-$('#agent-start').addEventListener('click', async () => {
-  try { await api('/api/agent/start', {}); } catch (error) { alert(error.message); }
-  for (let i = 0; i < 60; i++) { await new Promise(r => setTimeout(r, 1500)); await loadAgent(); if (!$('#agent-frame').classList.contains('hidden')) break; }
-});
-
-$('#agent-stop').addEventListener('click', async () => {
-  if (!confirm('Stop the Automation Agent? Its scheduled jobs stop too.')) return;
-  try { await api('/api/agent/stop', {}); } catch (error) { alert(error.message); }
-  loadAgent();
-});
 
 setInterval(() => { if (activeTab === 'agent') loadAgent(); }, 8000);
 
@@ -651,8 +862,6 @@ async function loadVideoStudio() {
   $('#video-studio-badge').replaceChildren(status.running
     ? badge(status.pipeline?.running ? 'generating' : 'running', status.pipeline?.running ? 'running' : 'finished')
     : badge(status.ready ? 'stopped' : 'source missing', 'stopped'));
-  $('#video-studio-start').classList.toggle('hidden', status.running);
-  $('#video-studio-stop').classList.toggle('hidden', !status.managed);
   $('#video-studio-log').textContent = status.log || '';
   const frame = $('#video-studio-frame');
   frame.classList.toggle('hidden', !status.running);
@@ -660,84 +869,60 @@ async function loadVideoStudio() {
   if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
 }
 
-$('#video-studio-start').addEventListener('click', async () => {
-  try {
-    await api('/api/studio/start', {});
-    for (let i = 0; i < 40; i++) {
-      await new Promise(resolve => setTimeout(resolve, 750));
-      await loadVideoStudio();
-      if (!$('#video-studio-frame').classList.contains('hidden')) break;
-    }
-  } catch (error) { alert(error.message); }
-});
-
-$('#video-studio-stop').addEventListener('click', async () => {
-  try { await api('/api/studio/stop', {}); } catch (error) { alert(error.message); }
-  loadVideoStudio();
-});
-
 setInterval(() => { if (activeTab === 'video') loadVideoStudio(); }, 5000);
 
-// ── PeakCut ──
-async function loadPeakcut() {
-  const status = await api('/api/peakcut');
-  $('#peakcut-badge').replaceChildren(status.running
+// ── MoneyPrinterTurbo ──
+async function loadMpt() {
+  const status = await api('/api/moneyprinterturbo');
+  $('#mpt-badge').replaceChildren(status.running
     ? badge('running', 'finished')
-    : badge(status.ready ? 'stopped' : 'source missing', 'stopped'));
-  $('#peakcut-start').classList.toggle('hidden', status.running);
-  $('#peakcut-stop').classList.toggle('hidden', !status.managed);
-  $('#peakcut-log').textContent = status.log || '';
-  const frame = $('#peakcut-frame');
+    : badge(status.ready ? 'stopped' : 'setup required', 'stopped'));
+  $('#mpt-open').disabled = !status.ready;
+  $('#mpt-setup').classList.toggle('hidden', status.ready);
+  $('#mpt-log').textContent = status.log || '';
+  const frame = $('#mpt-frame');
   frame.classList.toggle('hidden', !status.running);
-  if (status.running && frame.dataset.loaded !== '1') { frame.src = `${status.url}/app`; frame.dataset.loaded = '1'; }
+  if (status.running && frame.dataset.loaded !== '1') { frame.src = status.url; frame.dataset.loaded = '1'; }
   if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
 }
 
-let peakcutStartPromise = null;
+let mptStartPromise = null;
 
-function startPeakcutWhenReady() {
-  if (!peakcutStartPromise) {
-    peakcutStartPromise = ensurePeakcutWhenReady().finally(() => { peakcutStartPromise = null; });
+function startMptWhenReady() {
+  if (!mptStartPromise) {
+    mptStartPromise = ensureMptWhenReady().finally(() => { mptStartPromise = null; });
   }
-  return peakcutStartPromise;
+  return mptStartPromise;
 }
 
-async function ensurePeakcutWhenReady() {
-  const initial = await api('/api/peakcut');
-  if (initial.running) { await loadPeakcut(); return initial.url; }
-  await api('/api/peakcut/start', {});
+async function ensureMptWhenReady() {
+  const initial = await api('/api/moneyprinterturbo');
+  if (initial.running) { await loadMpt(); return initial.url; }
+  if (!initial.ready) { await loadMpt(); return null; }
+  await api('/api/moneyprinterturbo/start', {});
   for (let i = 0; i < 80; i++) {
     await new Promise(resolve => setTimeout(resolve, 750));
-    const status = await api('/api/peakcut');
-    await loadPeakcut();
+    const status = await api('/api/moneyprinterturbo');
+    await loadMpt();
     if (status.running) return status.url;
   }
-  throw new Error('PeakCut did not become ready. Check the PeakCut log below.');
+  throw new Error('MoneyPrinterTurbo did not become ready. Check its log and setup instructions.');
 }
 
-$('#peakcut-start').addEventListener('click', async () => {
-  try { await startPeakcutWhenReady(); } catch (error) { alert(error.message); }
-});
-
-$('#peakcut-open').addEventListener('click', async () => {
+$('#mpt-open').addEventListener('click', async () => {
   const popup = window.open('about:blank', '_blank');
-  if (!popup) { alert('Allow pop-ups to open PeakCut in a new window.'); return; }
+  if (!popup) { alert('Allow pop-ups to open MoneyPrinterTurbo separately.'); return; }
   popup.opener = null;
   try {
-    const url = await startPeakcutWhenReady();
-    popup.location.replace(`${url}/app`);
+    const url = await startMptWhenReady();
+    popup.location.replace(url);
   } catch (error) {
     popup.close();
     alert(error.message);
   }
 });
 
-$('#peakcut-stop').addEventListener('click', async () => {
-  try { await api('/api/peakcut/stop', {}); } catch (error) { alert(error.message); }
-  loadPeakcut();
-});
-
-setInterval(() => { if (activeTab === 'peakcut') loadPeakcut(); }, 5000);
+setInterval(() => { if (activeTab === 'moneyprinterturbo') loadMpt(); }, 5000);
 </script>
 </body>
 </html>

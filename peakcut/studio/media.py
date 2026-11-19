@@ -2,6 +2,7 @@
 import contextlib
 import json
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -95,12 +96,24 @@ class _Quiet:
     def error(self, m): pass
 
 
+def _retry_delay(attempt):
+    return min(2 ** max(0, attempt - 1), 15)
+
+
 def _ydl(opts):
     import yt_dlp
-    # a channel or playlist link is answered as "a list" straight away, never walked video by video
-    return yt_dlp.YoutubeDL({"noplaylist": True, "quiet": True, "no_warnings": True, "logger": _Quiet(),
-                             "extract_flat": "in_playlist", "playlistend": 1, "socket_timeout": 20,
-                             "concurrent_fragment_downloads": 4, **opts})
+    options = {"noplaylist": True, "quiet": True, "no_warnings": True, "logger": _Quiet(),
+               "extract_flat": "in_playlist", "playlistend": 1, "socket_timeout": 20,
+               "concurrent_fragment_downloads": 2, "retries": 15, "fragment_retries": 15,
+               "extractor_retries": 5, "file_access_retries": 10,
+               "retry_sleep_functions": {kind: _retry_delay for kind in ("http", "fragment", "extractor", "file_access")}}
+    node = config.ROOT.parent / ".tools" / "node-v24.19.0-win-x64" / "node.exe"
+    if node.is_file():
+        options["js_runtimes"] = {"node": {"path": str(node)}}
+    elif (node := shutil.which("node")):
+        options["js_runtimes"] = {"node": {"path": node}}
+    options.update(opts)
+    return yt_dlp.YoutubeDL(options)
 
 
 def _video_format(height):

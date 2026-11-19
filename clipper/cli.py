@@ -32,7 +32,9 @@ def run_video(args, job_dir: Path) -> None:
     _step(job_dir, "Getting the video")
     local = Path(args.source)
     if local.is_file():
-        source = {"path": str(local.resolve()), "title": local.stem, "creator": args.creator or "unknown",
+        saved_job = read_json(job_dir / "job.json", {})
+        source = {"path": str(local.resolve()), "title": saved_job.get("title") or local.stem,
+                  "creator": args.creator or saved_job.get("creator") or "unknown",
                   "url": None, "channel_url": None, "license": None, "id": None}
     else:
         source = fetch(args.source, job_dir)
@@ -99,10 +101,11 @@ def main() -> None:
     job_id = args.job_id or new_job_id()
     job_dir = Path(args.out) / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
-    if not read_json(job_dir / "job.json"):
+    saved_job = read_json(job_dir / "job.json", {})
+    if not saved_job:
         write_json(job_dir / "job.json", {"id": job_id, "created_at": now()})
     kind = "create" if args.create else "clone" if args.clone_topic else "live" if args.live else "video"
-    update_job(job_dir, kind=kind, source_url=args.source, creator=args.creator,
+    update_job(job_dir, kind=kind, source_url=saved_job.get("source_url") or args.source, creator=args.creator,
                permission=args.permission, niche=args.niche, state="running", pid=os.getpid(),
                options={"shorts": args.shorts, "long": args.long, "live_shorts": args.live_shorts,
                         "model": args.model, "window": args.window})

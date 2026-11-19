@@ -138,6 +138,22 @@ npm run clip:dashboard
 
 Open the **PeakCut** tab to start and show its dashboard automatically. **Open /app separately** opens the same page in another window. PeakCut uses port 8767 and keeps videos, settings, database, and its optional speech model in the ignored `peakcut-data/` folder. Its first startup downloads the speech model (about 480 MB). Add an AI key in PeakCut's **Settings, AI** page to enable AI-selected moments and titles; otherwise it can still choose moments based on speech and loudness. Its header links to the Agenttube GitHub repository and the X and Instagram profiles configured by `AGENTTUBE_PEAKCUT_GITHUB_URL`, `AGENTTUBE_PEAKCUT_X_URL`, and `AGENTTUBE_PEAKCUT_INSTAGRAM_URL` in `.env`.
 
+**MoneyPrinterTurbo tab.** Runs the upstream [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) Streamlit app in its own Python 3.11 environment. It complements the existing create workflow with a broad set of script, stock/AI footage, voice, subtitle, music, and batch-generation options. Its upstream source is MIT licensed; retain its `LICENSE` and notices. Individual media assets and provider services may have separate terms or charges.
+
+Install the source and dependencies once from the Agenttube folder (the source path should not contain spaces or non-ASCII characters on Windows):
+
+```powershell
+curl.exe --ssl-no-revoke -fL https://github.com/harry0703/MoneyPrinterTurbo/archive/refs/heads/main.zip -o moneyprinterturbo-source.zip
+Expand-Archive moneyprinterturbo-source.zip -DestinationPath .
+Move-Item MoneyPrinterTurbo-main moneyprinterturbo
+Remove-Item moneyprinterturbo-source.zip
+uv python install 3.11
+uv --system-certs sync --project moneyprinterturbo --frozen --python 3.11
+npm run clip:dashboard
+```
+
+Select **MoneyPrinterTurbo** to start it, or use **Open separately** if the embedded Streamlit view is unavailable in your browser. The WebUI binds to `127.0.0.1:8768`; the API service is not started. `MPT_HOME` points to the ignored `moneyprinterturbo-data/` folder for credentials, settings, and generated videos. Stop the app from the tab when finished. To update the upstream source, replace the extracted source while keeping `moneyprinterturbo-data/` intact.
+
 The same jobs run from the command line:
 
 ```bash

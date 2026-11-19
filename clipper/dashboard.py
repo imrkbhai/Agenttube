@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -15,7 +16,7 @@ import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from dotenv import load_dotenv
 
@@ -31,6 +32,8 @@ PORT = int(os.getenv("CLIPPER_DASHBOARD_PORT", "8765"))
 WEB_DIR = Path(__file__).resolve().parent / "web"
 CREATORS_FILE = CLIPS_DIR / "creators.json"
 CLIP_FILE = re.compile(r"^(short|long)_\d{2,3}\.mp4$")
+UPLOAD_EXTENSIONS = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024
 REVIEW_STATES = {"pending_review", "approved", "rejected"}
 ALLOWED_HOSTS = {f"{HOST}:{PORT}", f"localhost:{PORT}"}
 AGENT_PORT = int(os.getenv("AGENT_PORT", "3456"))
@@ -46,11 +49,16 @@ PEAKCUT_ROOT = ROOT / "peakcut"
 PEAKCUT_PORT = int(os.getenv("AGENTTUBE_PEAKCUT_PORT", "8767"))
 PEAKCUT_URL = f"http://127.0.0.1:{PEAKCUT_PORT}"
 PEAKCUT_LOG = ROOT / "logs" / "peakcut.log"
+MPT_ROOT = ROOT / "moneyprinterturbo"
+MPT_PORT = int(os.getenv("AGENTTUBE_MPT_PORT", "8768"))
+MPT_URL = f"http://127.0.0.1:{MPT_PORT}"
+MPT_LOG = ROOT / "logs" / "moneyprinterturbo.log"
 
 _processes: dict[str, subprocess.Popen] = {}
 _agent: dict[str, subprocess.Popen] = {}
 _video_studio: dict[str, subprocess.Popen] = {}
 _peakcut: dict[str, subprocess.Popen] = {}
+_moneyprinterturbo: dict[str, subprocess.Popen] = {}
 _lock = threading.Lock()
 ACTIVE = ("queued", "running", "stopping")
 
@@ -206,6 +214,70 @@ def start_job(body: dict) -> dict:
         command += [f"--clone-topic={topic}", f"--variants={_int(body, 'variants', 3, 1, 10)}"]
 
     return _spawn(job_id, job_dir, command)
+
+
+def start_upload(handler) -> dict:
+    params = parse_qs(urlparse(handler.path).query, keep_blank_values=True)
+    body = {key: values[0] for key, values in params.items()}
+    if body.get("mode", "video") != "video":
+        raise BadRequest("Upload is available for finished videos, not live streams")
+    permission = _text(body, "permission", 300, required=True)
+    creator, niche = _text(body, "creator", 100), _text(body, "niche", 100)
+    model = _text(body, "model", 40)
+    if model and not re.fullmatch(r"[a-z0-9.\-]+", model):
+        raise BadRequest("model must be a whisper size like base or small")
+
+    filename = _text(body, "filename", 240, required=True)
+    filename = Path(filename.replace("\\", "/")).name
+    extension = Path(filename).suffix.lower()
+    if extension not in UPLOAD_EXTENSIONS:
+        raise BadRequest("Choose an MP4, MOV, MKV, WebM, M4V or AVI video")
+    try:
+        length = int(handler.headers.get("Content-Length") or 0)
+    except ValueError:
+        raise BadRequest("The video upload size is invalid")
+    if length <= 0:
+        raise BadRequest("The selected video is empty")
+    if length > MAX_UPLOAD_BYTES:
+        raise BadRequest("Videos must be 4 GB or smaller")
+
+    job_id = new_job_id()
+    job_dir = CLIPS_DIR / job_id
+    destination = job_dir / f"source{extension}"
+    try:
+        CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+        if shutil.disk_usage(CLIPS_DIR).free < length:
+            raise BadRequest("There is not enough free disk space for this video")
+        job_dir.mkdir()
+        remaining = length
+        with destination.open("wb") as video:
+            while remaining:
+                chunk = handler.rfile.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise BadRequest("The video upload ended before the file was complete")
+                video.write(chunk)
+                remaining -= len(chunk)
+
+        shorts = _int(body, "shorts", 5, 0, 20)
+        long = _int(body, "long", 1, 0, 5)
+        job = {"id": job_id, "created_at": now(), "kind": "video", "source_url": f"Uploaded: {filename}",
+               "title": Path(filename).stem, "creator": creator, "state": "queued", "stage": "Starting"}
+        write_json(job_dir / "job.json", job)
+        command = [sys.executable, "-m", "clipper", str(destination), f"--job-id={job_id}", f"--out={CLIPS_DIR}",
+                   f"--shorts={shorts}", f"--long={long}", f"--permission={permission}"]
+        if creator:
+            command.append(f"--creator={creator}")
+        if niche:
+            command.append(f"--niche={niche}")
+        if model:
+            command.append(f"--model={model}")
+        return _spawn(job_id, job_dir, command)
+    except OSError as error:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise BadRequest("Could not save the uploaded video. Check free disk space and try again.") from error
+    except Exception:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
 
 
 def _spawn(job_id: str, job_dir: Path, command: list) -> dict:
@@ -446,6 +518,70 @@ def peakcut_stop() -> None:
     process.wait(timeout=15)
 
 
+# ── MoneyPrinterTurbo ──────────────────────────────────────────────────────
+
+def moneyprinterturbo_status() -> dict:
+    process = _moneyprinterturbo.get("process")
+    python = MPT_ROOT / ".venv" / "Scripts" / "python.exe"
+    if not python.is_file():
+        python = MPT_ROOT / ".venv" / "bin" / "python"
+    streamlit = MPT_ROOT / ".venv" / "Scripts" / "streamlit.exe"
+    if not streamlit.is_file():
+        streamlit = MPT_ROOT / ".venv" / "bin" / "streamlit"
+    source_ready = (MPT_ROOT / "webui" / "Main.py").is_file()
+    status = {"url": MPT_URL, "running": False,
+              "managed": process is not None and process.poll() is None,
+              "ready": source_ready and python.is_file() and streamlit.is_file(),
+              "source": source_ready}
+    try:
+        with urllib.request.urlopen(f"{MPT_URL}/_stcore/health", timeout=2) as response:
+            status.update(running=response.status == 200)
+    except Exception:
+        pass
+    if MPT_LOG.exists():
+        status["log"] = MPT_LOG.read_text(encoding="utf-8", errors="replace")[-3000:]
+    return status
+
+
+def moneyprinterturbo_start() -> dict:
+    if moneyprinterturbo_status()["running"]:
+        return moneyprinterturbo_status()
+    if not (MPT_ROOT / "webui" / "Main.py").is_file():
+        raise BadRequest("MoneyPrinterTurbo source is missing; see its setup instructions in README.md")
+    python = MPT_ROOT / ".venv" / "Scripts" / "python.exe"
+    if not python.is_file():
+        python = MPT_ROOT / ".venv" / "bin" / "python"
+    if not python.is_file():
+        raise BadRequest("Install MoneyPrinterTurbo dependencies first; see its setup instructions in README.md")
+    streamlit = MPT_ROOT / ".venv" / "Scripts" / "streamlit.exe"
+    if not streamlit.is_file():
+        streamlit = MPT_ROOT / ".venv" / "bin" / "streamlit"
+    if not streamlit.is_file():
+        raise BadRequest("Install MoneyPrinterTurbo dependencies first; see its setup instructions in README.md")
+    MPT_LOG.parent.mkdir(parents=True, exist_ok=True)
+    data_dir = ROOT / "moneyprinterturbo-data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    log = open(MPT_LOG, "ab")
+    env = {**os.environ, "MPT_HOME": str(data_dir), "PYTHONIOENCODING": "utf-8"}
+    _moneyprinterturbo["process"] = subprocess.Popen(
+        [str(python), "-m", "streamlit", "run", "webui/Main.py",
+         "--server.address=127.0.0.1", f"--server.port={MPT_PORT}",
+         "--server.headless=true", "--browser.gatherUsageStats=false",
+         "--client.toolbarMode=minimal", "--logger.hideWelcomeMessage=true",
+         "--server.showEmailPrompt=false"],
+        cwd=MPT_ROOT, stdout=log, stderr=subprocess.STDOUT, env=env)
+    log.close()
+    return {"starting": True, "url": MPT_URL}
+
+
+def moneyprinterturbo_stop() -> None:
+    process = _moneyprinterturbo.pop("process", None)
+    if process is None or process.poll() is not None:
+        raise BadRequest("MoneyPrinterTurbo was not started from this dashboard")
+    process.terminate()
+    process.wait(timeout=15)
+
+
 # ── HTTP ────────────────────────────────────────────────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
@@ -498,13 +634,15 @@ class Handler(BaseHTTPRequestHandler):
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; "
                                                               "script-src 'self' 'unsafe-inline'; media-src 'self'; "
                                                               f"frame-src http://127.0.0.1:{AGENT_PORT} http://127.0.0.1:{STUDIO_PORT} "
-                                                              f"http://127.0.0.1:{PEAKCUT_PORT}"})
+                                                              f"http://127.0.0.1:{PEAKCUT_PORT} http://127.0.0.1:{MPT_PORT}"})
             if path == "/api/agent":
                 return self._json(agent_status())
             if path == "/api/studio":
                 return self._json(video_studio_status())
             if path == "/api/peakcut":
                 return self._json(peakcut_status())
+            if path == "/api/moneyprinterturbo":
+                return self._json(moneyprinterturbo_status())
             if path == "/api/inspiration":
                 params = parse_qs(urlparse(self.path).query)
                 try:
@@ -532,6 +670,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, b"Forbidden", "text/plain")
         path = urlparse(self.path).path
         try:
+            if path == "/api/upload":
+                return self._json(start_upload(self))
             body = self._body()
             if path == "/api/creators":
                 return self._json(save_creator(body))
@@ -554,6 +694,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(peakcut_start())
             if path == "/api/peakcut/stop":
                 peakcut_stop()
+                return self._json({"ok": True})
+            if path == "/api/moneyprinterturbo/start":
+                return self._json(moneyprinterturbo_start())
+            if path == "/api/moneyprinterturbo/stop":
+                moneyprinterturbo_stop()
                 return self._json({"ok": True})
             if path == "/api/jobs":
                 return self._json(start_job(body))
@@ -626,6 +771,9 @@ def main() -> None:
         if process is not None and process.poll() is None:
             process.terminate()
         process = _video_studio.get("process")
+        if process is not None and process.poll() is None:
+            process.terminate()
+        process = _moneyprinterturbo.get("process")
         if process is not None and process.poll() is None:
             process.terminate()
 

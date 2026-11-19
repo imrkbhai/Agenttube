@@ -13,6 +13,10 @@ import time
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
+import truststore
+
+truststore.inject_into_ssl()
+
 import sqlalchemy as sa
 import uvicorn
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
