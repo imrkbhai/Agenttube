@@ -13,8 +13,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from clipper.clone import run_clone
+from clipper.create import LOOKS, run_create
 from clipper.download import ROOT, fetch
-from clipper.jobs import new_job_id, new_manifest, now, read_json, render_clip, update_job, write_json
+from clipper.jobs import JOB_ID, new_job_id, new_manifest, now, read_json, render_clip, update_job, write_json
 from clipper.live import run_live
 from clipper.moments import select_moments
 from clipper.transcribe import transcribe
@@ -75,6 +76,13 @@ def main() -> None:
     parser.add_argument("--clone-topic", default="",
                         help="Viral Clone: analyse the video's structure and write variants about this topic")
     parser.add_argument("--variants", type=int, default=3, help="Number of script variants for --clone-topic")
+    parser.add_argument("--create", choices=("script", "idea", "clone"),
+                        help="Create an original video: source is a text file (script/idea) or a clone job id")
+    parser.add_argument("--variant", type=int, default=1, help="Which clone variant to render (1-based)")
+    parser.add_argument("--format", choices=("short", "long"), default="short", help="9:16 Short or 16:9 video")
+    parser.add_argument("--look", choices=sorted(LOOKS), default="documentary", help="Visual look")
+    parser.add_argument("--voice", default="en-US-AndrewNeural",
+                        help="Edge voice (e.g. en-US-AriaNeural) or offline Windows voice name (David, Zira)")
     parser.add_argument("--out", default=str(CLIPS_DIR), help="Output folder")
     parser.add_argument("--job-id", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -82,8 +90,8 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     args.permission = args.permission.strip()
     args.clone_topic = args.clone_topic.strip()
-    # Clips reuse the creator's footage; a clone only studies its structure and reuses nothing.
-    if not args.permission and not args.clone_topic:
+    # Clips reuse the creator's footage; clones and created videos reuse nothing.
+    if not args.permission and not args.clone_topic and not args.create:
         parser.error("--permission must describe how you have the right to clip this video.")
     # The smaller model keeps transcription close to real time on a CPU.
     args.model = args.model or ("base" if args.live else "small")
@@ -93,13 +101,26 @@ def main() -> None:
     job_dir.mkdir(parents=True, exist_ok=True)
     if not read_json(job_dir / "job.json"):
         write_json(job_dir / "job.json", {"id": job_id, "created_at": now()})
-    kind = "clone" if args.clone_topic else "live" if args.live else "video"
+    kind = "create" if args.create else "clone" if args.clone_topic else "live" if args.live else "video"
     update_job(job_dir, kind=kind, source_url=args.source, creator=args.creator,
                permission=args.permission, niche=args.niche, state="running", pid=os.getpid(),
                options={"shorts": args.shorts, "long": args.long, "live_shorts": args.live_shorts,
                         "model": args.model, "window": args.window})
 
     try:
+        if args.create:
+            clone_job, text = None, ""
+            if args.create == "clone":
+                clone_job = Path(args.out) / args.source
+                if not JOB_ID.match(args.source) or not (clone_job / "blueprint.json").exists():
+                    raise RuntimeError("Unknown clone job.")
+            else:
+                text = Path(args.source).read_text(encoding="utf-8-sig").strip()
+            run_create(job_dir, args.create, text, args.format, args.look, args.voice, args.niche,
+                       args.language, clone_job, args.variant - 1)
+            update_job(job_dir, state="finished")
+            print(f"\nDone. Video saved for review in:\n   {job_dir}")
+            return
         if args.clone_topic:
             run_clone(args.source, job_dir, args.clone_topic, args.niche, max(1, min(args.variants, 10)),
                       args.model, args.language)

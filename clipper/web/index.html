@@ -65,7 +65,7 @@
   <h1>Clip Studio</h1>
   <nav class="tabs">
     <button data-tab="studio" class="active">Clip Studio</button>
-    <button data-tab="clone">Viral Clone</button>
+    <button data-tab="clone">Viral Clone &amp; Create</button>
     <button data-tab="agent">Automation Agent</button>
   </nav>
   <span class="hint" style="margin-left:auto">Local dashboard · nothing is uploaded without your approval</span>
@@ -166,7 +166,52 @@
       <p class="notice">Inspired by <a href="https://github.com/hypit-ai/hypit" target="_blank" rel="noopener" style="color:var(--accent)">Hypit</a>'s "clone any viral video" idea; this is an independent implementation.</p>
     </section>
     <section>
-      <h2>Clone jobs</h2>
+      <h2>Create a video (free)</h2>
+      <form id="create-form">
+        <label>Start from</label>
+        <select name="source">
+          <option value="script">My script — narrated exactly as written</option>
+          <option value="idea">An idea — Gemini writes the script (free tier key needed)</option>
+        </select>
+        <label>Script or idea</label>
+        <textarea name="text" rows="7" required placeholder="Paste a script, or describe the video you want. Any topic."></textarea>
+        <div class="row">
+          <div><label>Format</label><select name="format"><option value="short">Short 9:16</option><option value="long">Video 16:9</option></select></div>
+          <div><label>Look</label><select name="look">
+            <option value="documentary">Documentary (B&amp;W, yellow)</option>
+            <option value="studio">Studio (clean, colour)</option>
+            <option value="blueprint">Blueprint (science, how-it-works)</option>
+            <option value="night">Night (tech, trailers)</option>
+          </select></div>
+        </div>
+        <div class="row">
+          <div><label>Voice</label><select name="voice">
+            <option value="en-US-AndrewNeural">Andrew (Edge, falls back to offline)</option>
+            <option value="en-US-AriaNeural">Aria (Edge, falls back to offline)</option>
+            <option value="en-GB-RyanNeural">Ryan, British (Edge)</option>
+            <option value="hi-IN-MadhurNeural">Madhur, Hindi (Edge)</option>
+            <option value="David">David (offline Windows)</option>
+            <option value="Zira">Zira (offline Windows)</option>
+          </select></div>
+          <div><label>Niche (optional)</label><input name="niche" maxlength="100" placeholder="history, food, tech…"></div>
+        </div>
+        <div class="row" style="margin-top:12px"><button class="primary" type="submit">Create video</button></div>
+        <div class="error" id="create-error"></div>
+      </form>
+      <p class="notice">Free: free-licence Wikimedia Commons images (licences recorded in credits), offline or Edge voice, local word timing, FFmpeg. Method adapted from <a href="https://github.com/Moh4696/cinematic-skill" target="_blank" rel="noopener" style="color:var(--accent)">cinematic-skill</a> (MIT).</p>
+    </section>
+    <section>
+      <h2>Inspiration</h2>
+      <div class="row">
+        <input id="insp-q" placeholder="Search 700+ viral video prompts…">
+        <select id="insp-cat" style="max-width:150px"><option value="">All</option><option value="explainer">Explainers</option><option value="motion">Motion graphics</option><option value="3d">3D scenes</option><option value="interactive">Interactive</option></select>
+        <button id="insp-go" style="flex:0">Search</button>
+      </div>
+      <div id="insp" style="max-height:420px; overflow:auto; margin-top:8px"></div>
+      <p class="notice">From <a href="https://github.com/yihui-dev/awesome-opus5-5-videos" target="_blank" rel="noopener" style="color:var(--accent)">awesome-opus5-5-videos</a>. Each prompt belongs to its creator — use it as inspiration and credit them.</p>
+    </section>
+    <section>
+      <h2>Clone and create jobs</h2>
       <table><tbody id="clone-jobs"></tbody></table>
       <p class="muted" id="no-clones">No clone jobs yet.</p>
     </section>
@@ -320,8 +365,8 @@ function when(iso) { return iso ? new Date(iso).toLocaleString() : ''; }
 
 async function loadJobs() {
   const all = await api('/api/jobs');
-  const jobs = all.filter(job => job.kind !== 'clone');
-  renderCloneJobs(all.filter(job => job.kind === 'clone'));
+  const jobs = all.filter(job => !['clone', 'create'].includes(job.kind));
+  renderCloneJobs(all.filter(job => ['clone', 'create'].includes(job.kind)));
   $('#no-jobs').classList.toggle('hidden', jobs.length > 0);
   $('#jobs').replaceChildren(...jobs.map(job => el('tr', {
       class: `job${job.id === selectedJob ? ' selected' : ''}`,
@@ -419,7 +464,8 @@ function renderCloneJobs(jobs) {
       class: `job${job.id === selectedClone ? ' selected' : ''}`,
       onclick: () => { selectedClone = job.id; loadJobs(); }
     },
-    el('td', {}, el('div', { textContent: job.title || job.source_url || '' }),
+    el('td', {}, job.kind === 'create' ? badge('video', 'approved') : badge('clone', ''),
+      el('div', { textContent: job.title || job.source_url || '' }),
       el('div', { class: 'muted', textContent: when(job.created_at) })),
     el('td', {}, badge(job.state || 'unknown'), el('div', { class: 'muted', textContent: job.stage || '' })),
   )));
@@ -435,7 +481,22 @@ async function loadCloneDetail() {
   $('#clone-meta').textContent = [job.stage, job.error && `error: ${job.error}`].filter(Boolean).join(' · ');
   $('#clone-log').textContent = data.log;
   const body = $('#clone-body');
-  if (!blueprint) { body.replaceChildren(); return; }
+  if (job.kind === 'create') {
+    const key = `${selectedClone}:${data.clips.map(c => c.file + c.status).join()}`;
+    if (body.dataset.job === key) return;
+    body.dataset.job = key;
+    body.replaceChildren(...data.clips.map(clip => el('div', { class: 'clip', style: 'max-width:420px' },
+      el('video', { src: `/media/${selectedClone}/${clip.file}`, controls: true, preload: 'metadata' }),
+      el('div', { class: 'body' },
+        el('div', { class: 'title', textContent: clip.title }),
+        el('div', { class: 'muted', textContent: `${Math.round(clip.duration)}s · ${clip.format}` }),
+        el('div', { class: 'desc', textContent: clip.description || '' }),
+        el('div', { class: 'actions' }, badge(clip.status === 'pending_review' ? 'pending' : clip.status, clip.status),
+          el('button', { class: 'small', textContent: 'Approve', onclick: () => reviewFor(selectedClone, clip.file, 'approved') }),
+          el('button', { class: 'small danger', textContent: 'Reject', onclick: () => reviewFor(selectedClone, clip.file, 'rejected') }))))));
+    return;
+  }
+  if (!blueprint) { body.replaceChildren(); body.dataset.job = ''; return; }
   if (body.dataset.job === selectedClone) return;
   body.dataset.job = selectedClone;
   const bp = blueprint.blueprint || {};
@@ -460,9 +521,59 @@ async function loadCloneDetail() {
         el('div', { textContent: text(line.narration) }),
         el('div', { class: 'muted', textContent: `${text(line.beat)} · on screen: ${text(line.on_screen_text)} · visual: ${text(line.visual)}` })))),
       el('div', { class: 'muted', textContent: `CTA: ${text(variant.cta)} · Tags: ${text(variant.tags)}` }),
-      el('button', { class: 'small', textContent: 'Copy script', onclick: () => navigator.clipboard.writeText(
-        [variant.title, '', ...(variant.script || []).map(line => line.narration), '', variant.cta].join('\n')) }))));
+      el('div', { class: 'actions' },
+        el('button', { class: 'small primary', textContent: 'Make video', onclick: () => makeFromVariant(index + 1) }),
+        el('button', { class: 'small', textContent: 'Copy script', onclick: () => navigator.clipboard.writeText(
+          [variant.title, '', ...(variant.script || []).map(line => line.narration), '', variant.cta].join('\n')) })))));
 }
+
+async function makeFromVariant(variant) {
+  const form = $('#create-form');
+  try {
+    const job = await api('/api/jobs', { mode: 'create', source: 'clone', clone_job: selectedClone, variant,
+      format: form.format.value, look: form.look.value, voice: form.voice.value, niche: form.niche.value });
+    selectedClone = job.id;
+    loadJobs();
+  } catch (error) { alert(error.message); }
+}
+
+async function reviewFor(jobId, file, status) {
+  await api(`/api/jobs/${jobId}/review`, { file, status });
+  loadJobs();
+}
+
+$('#create-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  $('#create-error').textContent = '';
+  try {
+    const job = await api('/api/jobs', { ...Object.fromEntries(new FormData(event.target)), mode: 'create' });
+    selectedClone = job.id;
+    loadJobs();
+  } catch (error) { $('#create-error').textContent = error.message; }
+});
+
+async function searchInspiration() {
+  const box = $('#insp');
+  box.replaceChildren(el('p', { class: 'muted', textContent: 'Loading…' }));
+  try {
+    const params = new URLSearchParams({ q: $('#insp-q').value, category: $('#insp-cat').value });
+    const items = await api(`/api/inspiration?${params}`);
+    box.replaceChildren(...(items.length ? items : [null]).map(item => item ? el('div', { class: 'creator' },
+      el('div', { class: 'meta' }, badge(item.category || 'video', ''), ' ',
+        el('a', { href: item.post_url || item.author_url, target: '_blank', rel: 'noopener', style: 'color:var(--accent)',
+                  textContent: `@${item.author}` }), item.prompt_partial ? ' · partial prompt' : ''),
+      el('div', { style: 'margin-top:6px; white-space:pre-wrap; max-height:110px; overflow:auto', textContent: item.prompt || '' }),
+      el('div', { class: 'actions' }, el('button', { class: 'small', textContent: 'Use as idea', onclick: () => {
+        const form = $('#create-form');
+        form.source.value = 'idea';
+        form.text.value = `Inspired by @${item.author} (${item.post_url || item.author_url}):\n${item.prompt}`;
+        form.text.focus();
+      } }))) : el('p', { class: 'muted', textContent: 'No matches.' })));
+  } catch (error) { box.replaceChildren(el('p', { class: 'error', textContent: error.message })); }
+}
+$('#insp-go').addEventListener('click', searchInspiration);
+$('#insp-q').addEventListener('keydown', (event) => { if (event.key === 'Enter') searchInspiration(); });
+
 
 // ── automation agent ──
 async function loadAgent() {

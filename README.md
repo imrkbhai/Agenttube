@@ -112,6 +112,10 @@ npm run clip:dashboard   # then open http://127.0.0.1:8765
 
 **Viral Clone tab.** Paste a video that performed well and a topic: it is transcribed locally, Gemini maps its structure (hook, beats, pacing, payoff, CTA) and writes new scripts that follow the same structure for your topic. Only the structure is reused, never footage or sentences, and the downloaded audio is deleted afterwards. Inspired by [Hypit](https://github.com/hypit-ai/hypit)'s "clone any viral video" idea; independently implemented. CLI: `npm run clip -- <url> --clone-topic "your topic" --variants 3`.
 
+**Create a video (free, any topic).** Paste your own script (narrated exactly as written), describe an idea (Gemini's free tier writes the script), or press **Make video** on a clone variant. Each scene gets a free-licence Wikimedia Commons image with a slow camera move, a look (documentary, studio, blueprint, night), on-screen words that land on the spoken word, word-by-word captions, a synthesised whoosh between scenes and loudness-normalised audio. The voice is Microsoft Edge TTS when reachable, otherwise the offline Windows voice; word timing comes from local Whisper, so any voice works. Every job writes `credits.md` and an SRT, and attribution goes into the description. Method adapted from [cinematic-skill](https://github.com/Moh4696/cinematic-skill) (MIT). CLI: `npm run clip -- script.txt --create script --format short --look documentary`.
+
+**Inspiration.** Search 700+ viral video prompts from [awesome-opus5-5-videos](https://github.com/yihui-dev/awesome-opus5-5-videos) (fetched live; every prompt links to and credits its creator) and use one as the idea for a new video.
+
 **Automation Agent tab.** Starts, stops and embeds this repository's original YouTube Automation Agent dashboard (port 3456) so both tools are in one window. It needs `npm install` and stays in setup mode until you finish its Setup.
 
 The same jobs run from the command line:

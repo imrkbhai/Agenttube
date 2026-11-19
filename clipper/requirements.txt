@@ -5,3 +5,7 @@ google-genai>=1.0
 truststore>=0.10
 python-dotenv>=1.0
 numpy>=1.26
+edge-tts>=7.0
+pyttsx3>=2.90
+pillow>=10.0
+requests>=2.31

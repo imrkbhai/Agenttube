@@ -15,12 +15,13 @@ import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from dotenv import load_dotenv
 
 from clipper.cli import CLIPS_DIR
 from clipper.clone import load_blueprint
+from clipper.create import LOOKS
 from clipper.download import ROOT, _node_path
 from clipper.jobs import JOB_ID, new_job_id, now, read_json, update_job, write_json
 from clipper.live import STOP_FILE, live_status
@@ -35,6 +36,7 @@ ALLOWED_HOSTS = {f"{HOST}:{PORT}", f"localhost:{PORT}"}
 AGENT_PORT = int(os.getenv("AGENT_PORT", "3456"))
 AGENT_URL = f"http://127.0.0.1:{AGENT_PORT}"
 AGENT_LOG = CLIPS_DIR / "agent.log"
+INSPIRATION_URL = "https://raw.githubusercontent.com/yihui-dev/awesome-opus5-5-videos/main/data/videos.json"
 
 _processes: dict[str, subprocess.Popen] = {}
 _agent: dict[str, subprocess.Popen] = {}
@@ -159,8 +161,10 @@ def job_detail(job_id: str) -> dict:
 
 def start_job(body: dict) -> dict:
     mode = body.get("mode")
-    if mode not in ("video", "live", "clone"):
-        raise BadRequest("mode must be video, live or clone")
+    if mode not in ("video", "live", "clone", "create"):
+        raise BadRequest("mode must be video, live, clone or create")
+    if mode == "create":
+        return start_create(body)
     url = _url(body)
     permission = _text(body, "permission", 300, required=mode != "clone")
     topic = _text(body, "topic", 300, required=mode == "clone")
@@ -190,6 +194,10 @@ def start_job(body: dict) -> dict:
     if mode == "clone":
         command += [f"--clone-topic={topic}", f"--variants={_int(body, 'variants', 3, 1, 10)}"]
 
+    return _spawn(job_id, job_dir, command)
+
+
+def _spawn(job_id: str, job_dir: Path, command: list) -> dict:
     log = open(job_dir / "log.txt", "ab")
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1",
            "HF_HUB_DISABLE_SYMLINKS_WARNING": "1"}
@@ -197,6 +205,69 @@ def start_job(body: dict) -> dict:
     log.close()
     _processes[job_id] = process
     return {"id": job_id}
+
+
+def start_create(body: dict) -> dict:
+    source = body.get("source")
+    if source not in ("script", "idea", "clone"):
+        raise BadRequest("source must be script, idea or clone")
+    fmt = body.get("format") if body.get("format") in ("short", "long") else "short"
+    look = body.get("look") if body.get("look") in LOOKS else "documentary"
+    voice = _text(body, "voice", 60) or "en-US-AndrewNeural"
+    if not re.fullmatch(r"[\w .-]+", voice):
+        raise BadRequest("invalid voice name")
+    niche = _text(body, "niche", 100)
+
+    job_id = new_job_id()
+    job_dir = CLIPS_DIR / job_id
+    if source == "clone":
+        clone_id = _text(body, "clone_job", 40, required=True)
+        if not JOB_ID.match(clone_id) or not (CLIPS_DIR / clone_id / "blueprint.json").exists():
+            raise BadRequest("unknown clone job")
+        target = clone_id
+        label = f"Clone {clone_id} variant {_int(body, 'variant', 1, 1, 10)}"
+    else:
+        text = str(body.get("text") or "").strip()[:60_000]
+        if len(text) < 20:
+            raise BadRequest("write a script or idea of at least a sentence")
+        job_dir.mkdir(parents=True)
+        (job_dir / "input.txt").write_text(text, encoding="utf-8")
+        target = str(job_dir / "input.txt")
+        label = text[:80]
+    job_dir.mkdir(parents=True, exist_ok=True)
+    write_json(job_dir / "job.json", {"id": job_id, "created_at": now(), "kind": "create", "source_url": label,
+                                       "state": "queued", "stage": "Starting"})
+    command = [sys.executable, "-m", "clipper", target, f"--create={source}", f"--job-id={job_id}",
+               f"--out={CLIPS_DIR}", f"--format={fmt}", f"--look={look}", f"--voice={voice}",
+               f"--variant={_int(body, 'variant', 1, 1, 10)}"]
+    if niche:
+        command.append(f"--niche={niche}")
+    return _spawn(job_id, job_dir, command)
+
+
+# ── inspiration (awesome-opus5-5-videos prompt library, MIT; prompts belong to their creators) ──
+
+_inspiration: dict = {}
+
+
+def inspiration(query: str, category: str) -> list:
+    if "items" not in _inspiration:
+        import requests
+        response = requests.get(INSPIRATION_URL, timeout=30)
+        response.raise_for_status()
+        _inspiration["items"] = response.json()
+    words = [w for w in query.lower().split() if w]
+    results = []
+    for item in _inspiration["items"]:
+        if category and item.get("category") != category:
+            continue
+        haystack = f"{item.get('prompt', '')} {item.get('slug', '')}".lower()
+        if all(w in haystack for w in words):
+            results.append({k: item.get(k) for k in ("slug", "author", "author_url", "post_url", "category",
+                                                     "tech_tags", "prompt", "prompt_partial", "skillry_url")})
+        if len(results) >= 60:
+            break
+    return results
 
 
 def stop_job(job_id: str) -> None:
@@ -301,7 +372,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.headers.get("Content-Type", "").startswith("application/json"):
             raise BadRequest("expected JSON")
         length = int(self.headers.get("Content-Length") or 0)
-        if length > 20_000:
+        if length > 200_000:
             raise BadRequest("request too large")
         data = json.loads(self.rfile.read(length) or b"{}")
         if not isinstance(data, dict):
@@ -321,6 +392,12 @@ class Handler(BaseHTTPRequestHandler):
                                                               f"frame-src http://127.0.0.1:{AGENT_PORT}"})
             if path == "/api/agent":
                 return self._json(agent_status())
+            if path == "/api/inspiration":
+                params = parse_qs(urlparse(self.path).query)
+                try:
+                    return self._json(inspiration(params.get("q", [""])[0][:100], params.get("category", [""])[0][:30]))
+                except Exception as error:
+                    return self._json({"error": f"Could not load the prompt library: {error}"}, 502)
             if path == "/api/creators":
                 return self._json(load_creators())
             if path == "/api/jobs":

@@ -31,7 +31,15 @@ def write_json(path: Path, data) -> None:
     # Write then rename, so the dashboard never reads a half-written file.
     temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     temp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    os.replace(temp, path)
+    for attempt in range(20):
+        try:
+            os.replace(temp, path)
+            return
+        except PermissionError:
+            # Windows refuses the rename while another process (the dashboard) is reading the file.
+            if attempt == 19:
+                raise
+            time.sleep(0.05)
 
 
 def update_job(job_dir: Path, **fields) -> None:
