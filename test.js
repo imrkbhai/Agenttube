@@ -2562,7 +2562,7 @@ class SystemTest {
     const os = require('os');
     const sharp = require('sharp');
 
-    const envKeys = ['OPENAI_API_KEY', 'GEMINI_API_KEY', 'REPLICATE_API_KEY', 'ELEVENLABS_API_KEY'];
+    const envKeys = ['OPENAI_API_KEY', 'GEMINI_API_KEY', 'REPLICATE_API_KEY', 'ELEVENLABS_API_KEY', 'PEXELS_API_KEY', 'EDGE_TTS_ENABLED', 'EDGE_TTS_PYTHON', 'EDGE_TTS_VOICE', 'IMAGE_PROVIDER'];
     const savedEnv = {};
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'yaa-gemini-image-'));
     for (const key of envKeys) {
@@ -2617,6 +2617,43 @@ class SystemTest {
       const none = new AIVideoGenerator({});
       if (none.gemini || none.openai) {
         throw new Error('Media services initialized without any credentials');
+      }
+
+      const stockBytes = await sharp({
+        create: { width: 640, height: 360, channels: 3, background: '#245b47' }
+      }).png().toBuffer();
+      const pexelsGenerator = new AIVideoGenerator({}, {
+        assetsDirectory: directory,
+        pexelsHttp: {
+          get: async url => url.includes('/v1/search')
+            ? { data: { photos: [{ id: 77, photographer: 'Test Photographer', url: 'https://pexels.com/photo/77', src: { large: 'https://images.pexels.com/77' } }] } }
+            : { data: stockBytes }
+        }
+      });
+      pexelsGenerator.pexelsApiKey = 'test-pexels-key';
+      const stockPaths = await pexelsGenerator.generateVisualAssets('forest canopy', 'cinematic', 1);
+      const stockMetadata = await sharp(stockPaths[0]).metadata();
+      const stockSource = pexelsGenerator.lastVisualAssetSources[0];
+      if (stockMetadata.width !== 640 || stockSource?.provider !== 'pexels' || stockSource?.rightsConfirmed !== true || !stockSource.sourceUrl) {
+        throw new Error('Pexels fallback did not produce a valid licensed asset with source evidence');
+      }
+
+      const edgeTtsGenerator = new AIVideoGenerator({});
+      edgeTtsGenerator.edgeTtsEnabled = true;
+      edgeTtsGenerator.spawnProcess = (_executable, args) => {
+        if (args.includes('test narration') || !args.includes('edge_tts')) throw new Error('Edge TTS text was not sent through stdin');
+        const child = new (require('events').EventEmitter)();
+        child.stdin = { end: () => setImmediate(async () => {
+          await fs.writeFile(args[args.length - 1], Buffer.alloc(256, 1));
+          child.emit('close', 0);
+        }) };
+        child.stderr = new (require('stream').PassThrough)();
+        return child;
+      };
+      const edgeAudio = path.join(directory, 'edge-tts.mp3');
+      await edgeTtsGenerator.generateTTSAudio('test narration', edgeAudio);
+      if (edgeTtsGenerator.lastNarrationResult?.provider !== 'edge-tts' || !await edgeTtsGenerator.isUsableAudioFile(edgeAudio)) {
+        throw new Error('Edge TTS provider did not return usable narration evidence');
       }
     } finally {
       for (const key of envKeys) {

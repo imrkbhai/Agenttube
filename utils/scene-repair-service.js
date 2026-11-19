@@ -79,6 +79,7 @@ function buildInitialSceneManifest(production = {}, providerResult = {}) {
   const totalWords = wordCounts.reduce((sum, count) => sum + count, 0);
   const generated = providerResult.scenes || [];
   const visualAssets = (production.assets?.video?.visualAssets || []).filter(Boolean);
+  const visualAssetSources = production.assets?.video?.visualAssetSources || [];
   const audio = production.assets?.audio || {};
   const narrationStatus = audio.intentionalSilence === true
     ? 'intentional_silence'
@@ -87,17 +88,23 @@ function buildInitialSceneManifest(production = {}, providerResult = {}) {
   return blueprints.map((scene, position) => {
     const generatedScene = generated.find(item => String(item.label || '').toLowerCase() === scene.label.toLowerCase()) || generated[position];
     const imagePath = visualAssets[position % Math.max(1, visualAssets.length)] || null;
+    const imageSource = visualAssetSources.find(item => item.path === imagePath) || null;
     const assetPath = generatedScene?.path || imagePath;
     const assetType = generatedScene?.path ? 'video' : imagePath ? 'image' : 'missing';
-    const provider = generatedScene?.provider || (assetType === 'image' ? 'image-provider' : providerResult.actualProvider || 'slideshow');
+    const provider = generatedScene?.provider || imageSource?.provider || (assetType === 'image' ? 'image-provider' : providerResult.actualProvider || 'slideshow');
     return {
       id: `scene_${crypto.randomUUID()}`,
       position,
       ...scene,
       duration: Math.max(2, Number(((wordCounts[position] / totalWords) * totalDuration).toFixed(2))),
       assetType,
-      assetOrigin: 'generated',
+      assetOrigin: generatedScene?.path ? 'generated' : imageSource?.origin || 'generated',
       assetPath,
+      assetEvidence: imageSource ? {
+        photographer: imageSource.photographer || null,
+        sourceUrl: imageSource.sourceUrl || null,
+        licenseUrl: imageSource.licenseUrl || null
+      } : null,
       audioPath: null,
       narrationProvider: audio.provider || null,
       narrationModel: audio.model || null,
@@ -112,7 +119,7 @@ function buildInitialSceneManifest(production = {}, providerResult = {}) {
       narrationStatus,
       revision: 1,
       locked: false,
-      rightsConfirmed: true,
+      rightsConfirmed: imageSource?.rightsConfirmed !== false,
       provenanceSourceIds: [],
       containsSyntheticMedia: Boolean(generatedScene?.path && !['slideshow', 'simulation'].includes(provider)),
       estimatedCost: generatedScene?.path ? { unit: 'generated_seconds', amount: generatedScene.duration || 0, pricing: 'provider-priced' } : {},

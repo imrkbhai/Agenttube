@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
 const sharp = require('sharp');
+const { spawn } = require('child_process');
 const { Logger } = require('./logger');
 const { runFFmpeg, checkFFmpeg, ffmpegInstallHint } = require('./ffmpeg');
 const { MediaGenerationService } = require('./media-generation-service');
@@ -15,6 +16,15 @@ class AIVideoGenerator {
     this.db = options.db || null;
     this.lastVideoResult = null;
     this.lastNarrationResult = null;
+    this.lastVisualAssetSources = [];
+    this.pexelsApiKey = resolvedCredentials.pexels?.apiKey || process.env.PEXELS_API_KEY;
+    this.pexelsHttp = options.pexelsHttp || axios;
+    this.assetsDirectory = options.assetsDirectory || path.join(__dirname, '..', 'data', 'assets');
+    this.preferPexels = String(process.env.IMAGE_PROVIDER || '').toLowerCase() === 'pexels';
+    this.edgeTtsEnabled = String(process.env.EDGE_TTS_ENABLED || '').toLowerCase() === 'true';
+    this.edgeTtsPython = process.env.EDGE_TTS_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+    this.edgeTtsVoice = process.env.EDGE_TTS_VOICE || 'en-US-AriaNeural';
+    this.spawnProcess = options.spawnProcess || spawn;
     
     // Initialize AI services with graceful fallback
     const openaiKey = resolvedCredentials.openai?.apiKey || process.env.OPENAI_API_KEY;
@@ -67,7 +77,11 @@ class AIVideoGenerator {
 
     try {
       let generatedPath;
-      if (this.elevenLabsApiKey && this.elevenLabsVoiceId) {
+      if (this.edgeTtsEnabled) {
+        provider = 'edge-tts';
+        model = this.edgeTtsVoice;
+        generatedPath = await this.generateEdgeTTS(text, outputPath);
+      } else if (this.elevenLabsApiKey && this.elevenLabsVoiceId) {
         provider = 'elevenlabs';
         model = this.elevenLabsModel;
         generatedPath = await this.generateElevenLabsTTS(text, outputPath);
@@ -191,11 +205,35 @@ class AIVideoGenerator {
     return outputPath;
   }
 
+  async generateEdgeTTS(text, outputPath) {
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    const script = 'import asyncio,sys,edge_tts; asyncio.run(edge_tts.Communicate(sys.stdin.read(), sys.argv[1]).save(sys.argv[2]))';
+    const child = this.spawnProcess(this.edgeTtsPython, ['-c', script, this.edgeTtsVoice, outputPath], {
+      stdio: ['pipe', 'ignore', 'pipe'],
+      windowsHide: true
+    });
+    let stderr = '';
+    child.stderr?.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
+    child.stdin.end(String(text));
+
+    await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', code => {
+        if (code === 0) return resolve();
+        reject(new Error(`Edge TTS failed${stderr ? `: ${stderr.trim()}` : ` with exit code ${code}`}`));
+      });
+    });
+    return outputPath;
+  }
+
   async generateVisualAssets(prompt, style = "ethereal", count = 1) {
     this.logger.info(`Generating ${count} visual assets with style: ${style}`);
+    this.lastVisualAssetSources = [];
 
     try {
+      if (this.preferPexels && this.pexelsApiKey) return await this.generatePexelsAssets(prompt, count);
       if (!this.openai && !this.gemini) {
+        if (this.pexelsApiKey) return await this.generatePexelsAssets(prompt, count);
         return await this.simulateVisualAssets(prompt, style, count);
       }
 
@@ -203,17 +241,64 @@ class AIVideoGenerator {
       const localPaths = [];
 
       for (let i = 0; i < count; i++) {
-        const imagePath = path.join(__dirname, '..', 'data', 'assets', `visual_${Date.now()}_${i}.png`);
+        const imagePath = path.join(this.assetsDirectory, `visual_${Date.now()}_${i}.png`);
         await this.generateImage(enhancedPrompt, imagePath);
         localPaths.push(imagePath);
+        this.lastVisualAssetSources.push({
+          path: imagePath,
+          provider: this.openai ? 'openai' : 'gemini',
+          origin: 'generated',
+          rightsConfirmed: true
+        });
       }
 
       this.logger.info(`Generated ${localPaths.length} visual assets`);
       return localPaths;
     } catch (error) {
       this.logger.error('Visual asset generation failed:', error);
+      if (this.pexelsApiKey && !this.preferPexels) {
+        try {
+          return await this.generatePexelsAssets(prompt, count);
+        } catch (fallbackError) {
+          this.logger.warn(`Pexels stock image fallback failed: ${fallbackError.message}`);
+        }
+      }
+      this.lastVisualAssetSources = [];
       return await this.simulateVisualAssets(prompt, style, count);
     }
+  }
+
+  async generatePexelsAssets(query, count) {
+    const assets = [];
+    for (let index = 0; index < count; index++) {
+      const response = await this.pexelsHttp.get('https://api.pexels.com/v1/search', {
+        headers: { Authorization: this.pexelsApiKey },
+        params: { query: String(query).slice(0, 200), orientation: 'landscape', size: 'large', per_page: 1, page: index + 1 },
+        timeout: 30000
+      });
+      const photo = response.data?.photos?.[0];
+      const imageUrl = photo?.src?.large2x || photo?.src?.large || photo?.src?.original;
+      if (!photo || !imageUrl) throw new Error('Pexels returned no usable landscape photo for the scene');
+
+      const imagePath = path.join(this.assetsDirectory, `pexels_${photo.id || Date.now()}_${index}.jpg`);
+      const imageResponse = await this.pexelsHttp.get(imageUrl, { responseType: 'arraybuffer', timeout: 60000 });
+      await fs.mkdir(path.dirname(imagePath), { recursive: true });
+      await sharp(Buffer.from(imageResponse.data), { failOn: 'error' }).jpeg({ quality: 92 }).toFile(imagePath);
+      const dimensions = await sharp(imagePath).metadata();
+      if (!dimensions.width || !dimensions.height) throw new Error('Pexels returned an invalid image asset');
+
+      assets.push(imagePath);
+      this.lastVisualAssetSources.push({
+        path: imagePath,
+        provider: 'pexels',
+        origin: 'licensed_stock',
+        rightsConfirmed: true,
+        photographer: photo.photographer || null,
+        sourceUrl: photo.url || null,
+        licenseUrl: 'https://www.pexels.com/license/'
+      });
+    }
+    return assets;
   }
 
   async generateImage(prompt, imagePath) {

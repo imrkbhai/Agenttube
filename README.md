@@ -131,6 +131,8 @@ The optional external adapter uses a shell-free Python child process, sends cont
 
 Gemini offers free access for supported text and TTS usage. Gemini AI image generation currently requires paid-tier access; without an image provider, Lumen can assemble gradient-based visuals instead.
 
+For a no-key narration option, install the Python `edge-tts` package and set `EDGE_TTS_ENABLED=true`. Set `EDGE_TTS_PYTHON` to the Python executable when it is not available as `python`, and optionally choose a voice with `EDGE_TTS_VOICE`. To prefer free stock stills over configured image models, set `IMAGE_PROVIDER=pexels` and `PEXELS_API_KEY`; Pexels source, photographer, and license URL are retained in the scene evidence. When not preferred, Pexels is used if no image model is configured or the configured model fails. Drafts still require the normal review and rights gates before publishing.
+
 ### Run the Autonomous Channel Operator
 
 Open **Autonomous operator** in the dashboard and describe the channel outcome—not a task list. Set the objective, audience, content pillars, publishing cadence, success metric, and boundaries, then choose **Activate & run now**.
@@ -318,6 +320,11 @@ OPENAI_API_KEY=sk-...
 # Optional: premium TTS
 # ELEVENLABS_API_KEY=...
 # ELEVENLABS_VOICE_ID=...
+# EDGE_TTS_ENABLED=true
+# EDGE_TTS_PYTHON=python
+# EDGE_TTS_VOICE=en-US-AriaNeural
+# IMAGE_PROVIDER=pexels
+# PEXELS_API_KEY=...
 
 # Optional: AI video generation
 # VIDEO_PROVIDER=slideshow # auto, seedance, minimax_h3, google_omni, kling, wan

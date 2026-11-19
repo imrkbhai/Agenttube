@@ -302,16 +302,19 @@ class ProductionManagementAgent {
       // Generate visual assets using DALL-E
       const visualPrompts = this.createVisualPromptsFromScript(script);
       const visualAssets = [];
+      const visualAssetSources = [];
       const profile = await this.db.getChannelProfile?.() || {};
       const visualStyle = profile.visual_style || 'ethereal';
       
       for (const prompt of visualPrompts) {
         const assets = await this.aiVideoGenerator.generateVisualAssets(prompt, visualStyle, 1);
         visualAssets.push(...assets);
+        visualAssetSources.push(...(this.aiVideoGenerator.lastVisualAssetSources || []));
       }
       
       productionData.assets.video = {
         visualAssets: visualAssets,
+        visualAssetSources,
         duration: productionData.estimatedDuration,
         format: 'mp4',
         resolution: '1920x1080',
