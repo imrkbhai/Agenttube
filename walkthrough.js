@@ -61,7 +61,7 @@ const AI_PROVIDER_GUIDE = {
       'Create a key and copy it'
     ],
     models: [...PROVIDERS.openrouter.models],
-    defaultModel: 'google/gemini-3.7-flash',
+    defaultModel: 'google/gemini-3.8-flash',
     covers: 'scripts only (add a Gemini or OpenAI key for images/voice)',
     save(credentials, apiKey, model) {
       credentials.aiProvider = { provider: 'openrouter', apiKey, model };
@@ -106,6 +106,32 @@ const AI_PROVIDER_GUIDE = {
       credentials.aiProvider = { provider: 'glm', apiKey, model };
     },
     validationCreds: (apiKey, model) => ({ aiProvider: { provider: 'glm', apiKey, model } })
+  },
+  deepseek: {
+    label: 'DeepSeek — low-cost V4.1 Flash and V4 Pro text models',
+    keyUrl: 'https://platform.deepseek.com/api_keys',
+    keyHint: 'starts with "sk-"',
+    instructions: ['Create an account and add credit', 'Create an API key and copy it'],
+    models: [...PROVIDERS.deepseek.models],
+    defaultModel: PROVIDERS.deepseek.defaultModel,
+    covers: 'scripts only (add a Gemini or OpenAI key for images/voice)',
+    save(credentials, apiKey, model) {
+      credentials.aiProvider = { provider: 'deepseek', apiKey, model };
+    },
+    validationCreds: (apiKey, model) => ({ aiProvider: { provider: 'deepseek', apiKey, model } })
+  },
+  minimax: {
+    label: 'MiniMax — M3 family text models',
+    keyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key',
+    keyHint: 'from the MiniMax platform console',
+    instructions: ['Create an account', 'Open Interface Key and create a key'],
+    models: [...PROVIDERS.minimax.models],
+    defaultModel: PROVIDERS.minimax.defaultModel,
+    covers: 'scripts only (add a Gemini or OpenAI key for images/voice)',
+    save(credentials, apiKey, model) {
+      credentials.aiProvider = { provider: 'minimax', apiKey, model };
+    },
+    validationCreds: (apiKey, model) => ({ aiProvider: { provider: 'minimax', apiKey, model } })
   }
 };
 
@@ -330,7 +356,7 @@ class SetupWalkthrough {
 
     try {
       const service = new AITextService(guide.validationCreds(apiKey, model));
-      const reply = await service.generateText('Reply with the single word OK.', { maxTokens: 20, temperature: 0 });
+      const reply = await service.generateText('Reply with the single word OK.', { maxTokens: 256, temperature: 0 });
       return typeof reply === 'string' && reply.length > 0;
     } catch (error) {
       console.log(chalk.red(`  ✗ ${error.message}`));
@@ -353,7 +379,7 @@ class SetupWalkthrough {
     const { providerId } = await inquirer.prompt([{
       type: 'list',
       name: 'providerId',
-      message: 'Which video provider should Lumen use?',
+      message: 'Which video provider should YouTube Automation Agent use?',
       choices: Object.entries(VIDEO_PROVIDER_GUIDE).map(([value, guide]) => ({ name: guide.label, value }))
     }]);
     const guide = VIDEO_PROVIDER_GUIDE[providerId];
