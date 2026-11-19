@@ -1,4 +1,4 @@
-# YouTube Automation Agent
+# YouTube Automation Agent - Agenttube
 
 **The open-source AI agent that runs a YouTube channel end to end, with you approving every video before it goes out.**
 
