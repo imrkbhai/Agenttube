@@ -1,54 +1,64 @@
-# YouTube Automation Agent - Agenttube
+# Agenttube
 
-**The open-source AI agent that runs a YouTube channel end to end, with you approving every video before it goes out.**
+**A local dashboard for clipping, creating, reviewing, and managing YouTube video workflows.**
 
-It researches topics, writes scripts, generates narration and visuals, assembles real MP4s, writes titles, descriptions and tags, schedules approved videos, and learns from analytics and from what your audience says. It runs on your own machine with your own API keys.
+Clip Studio opens first: paste a video link or upload a file, manage creators, then review generated clips in **All Videos**. The other tabs bring Viral Clone & Create, the original YouTube Automation Agent, Video Studio, and MoneyPrinterTurbo into the same dashboard. Each tool keeps its own workflow and setup.
 
-[![CI](https://github.com/darkzOGx/youtube-automation-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/darkzOGx/youtube-automation-agent/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js 18.17+](https://img.shields.io/badge/node-18.17%2B-43853d.svg)](package.json)
-[![Releases](https://img.shields.io/github/v/release/darkzOGx/youtube-automation-agent?label=release)](https://github.com/darkzOGx/youtube-automation-agent/releases)
 
-![The operator console: videos waiting for your decision, a generation job in progress, and the publishing calendar](assets/screenshots/overview.png)
+![Agenttube Clip Studio Home with the clip composer and creator list](assets/screenshots/overview.png)
 
-| ![Content review: quality checks, metadata, and the approve, save, reject, and regenerate actions for one video](assets/screenshots/review.png) | ![Autonomous operator: the channel mandate, the current run, and the editorial plan the agent decided to make](assets/screenshots/operator.png) |
+| ![All Videos showing job status and clips ready for review](assets/screenshots/review.png) | ![Clip Studio Home at a mobile viewport](assets/screenshots/operator.png) |
 | :--: | :--: |
-| Content review: quality checks and approval for one video | Autonomous operator: your mandate and the agent's plan |
+| All Videos: job progress and review queue | Clip Studio Home: responsive layout |
 
-*Screenshots use sample data so every panel is populated. Regenerate them with `npm run docs:screenshots`.*
+*Screenshots use browser-only demo creators and jobs. Run `npm run docs:screenshots` with the local dashboard running to regenerate them; it does not change saved creators or jobs.*
 
 ## Why it's different
 
-- **You approve before anything is published.** Finished videos wait for fact review, media-rights confirmation, and your approval. Turning on autonomy doesn't skip those checks.
-- **Real output only.** Simulated or placeholder media is clearly marked and can never be approved or uploaded.
-- **Self-hosted.** Your keys, media, and channel data stay on your machine.
-- **Learns from evidence, with your sign-off.** Lessons from analytics, retention curves, and comments shape future videos only after you approve them.
-- **Your choice of providers.** Eight text providers or OpenRouter, five AI video providers, or free local slideshow rendering.
+- **One dashboard, distinct workflows.** Clip Studio, Viral Clone & Create, and the integrated studios remain separate tools with their own setup and data.
+- **Review clips before you use them.** Clip Studio produces local files for review; it does not publish them to YouTube.
+- **Local-first.** Dashboard services run on your machine, with outputs kept in their configured data folders.
+- **Choose the right workflow.** Use Clip Studio for permitted source footage, Video Studio or MoneyPrinterTurbo for original videos, and Automation Agent for channel planning and publishing.
 
 ## Quick start
 
-You need:
+For Clip Studio, you need Node.js 18.17 or newer, Python 3.10 or newer, and FFmpeg with libass installed. Create its isolated environment and start the dashboard:
 
-- Node.js 18.17 or newer
-- A Google account and YouTube Data API credentials ([setup steps](#youtube-credentials))
-- An API key for at least one [text provider](docs/providers.md#text). Gemini has free tiers for text and narration.
+```powershell
+python -m venv .venv-clipper
+.venv-clipper\Scripts\python.exe -m pip install -r clipper\requirements.txt
+npm run clip:dashboard
+```
+
+On macOS or Linux, use `.venv-clipper/bin/python` in place of `.venv-clipper\Scripts\python.exe`. Open `http://127.0.0.1:8765`.
+
+The dashboard opens on Clip Studio Home. Use **All Videos** to follow jobs and review clips. Optional tools may need their own dependencies and credentials; see the sections below.
+
+## Dashboard tabs
+
+| Tab | What it does |
+| --- | --- |
+| Clip Studio | Home has the URL/upload composer and creator list; All Videos shows job progress and clip review. |
+| Viral Clone & Create | Analyzes a reference video's structure, writes variants, and creates original videos. |
+| Automation Agent | Embeds the original channel automation dashboard when its service is running. |
+| Video Studio | Shows status and logs for the original-video workflow and can open its interface separately. |
+| MoneyPrinterTurbo | Opens the Streamlit video-generation workflow; selecting the tab starts it when configured. |
+
+PeakCut is not a dashboard tab. Its source remains available separately in [`peakcut/`](peakcut/README.md).
+
+## Automation Agent
+
+The Automation Agent is the original YouTube channel-management application, running as a separate Node.js service on port 3456. Its dashboard tab shows service status, logs, and an **Open in new window** link; start the service from the Agenttube folder:
 
 ```bash
-git clone https://github.com/darkzOGx/youtube-automation-agent.git
-cd youtube-automation-agent
 npm install
-npx playwright install chromium   # renders slideshow videos; on Linux add --with-deps
 npm run walkthrough
 npm start
 ```
 
-Then open `http://localhost:3456`.
-
-1. **`npm run walkthrough`** explains each provider choice, tests your keys, and connects your YouTube channel. For a shorter flow, use `npm run setup`. Every setting is documented in [`.env.example`](.env.example).
-2. **Check readiness.** In the dashboard, open **Production readiness** and choose **Run verified check**. It makes small live text and narration requests, checks access to your channel, and builds and decodes a test MP4, without uploading anything.
-3. **Make videos.** Open **Autonomous operator**, describe the channel you want, and choose **Activate & run now**, or create a single video from the dashboard. Finished videos wait in **Pipeline** for your review and approval.
-
-FFmpeg is installed with `npm install` through `ffmpeg-static`.
+`npm run walkthrough` configures providers and connects the channel. `npm run setup` offers a shorter setup. Settings are documented in [`.env.example`](.env.example).
 
 ### YouTube credentials
 
@@ -57,7 +67,7 @@ FFmpeg is installed with `npm install` through `ffmpeg-static`.
 3. Create an OAuth 2.0 client of type **Desktop app** (not Web application) and save the JSON as `config/credentials.json`.
 4. Under **Google Auth Platform → Audience**, add the Google account that owns your channel as a **test user**. Otherwise sign-in fails with `Error 403: access_denied`. While the app is in Testing mode, Google expires the sign-in after 7 days.
 
-## How it works
+### Automation Agent workflow
 
 | Stage | What the agent does | What you control |
 | --- | --- | --- |
@@ -68,7 +78,7 @@ FFmpeg is installed with `npm install` through `ffmpeg-static`.
 | Publish | Schedules and uploads approved content | Privacy, timing, final decision |
 | Learn | Captures 24-hour and 7-day evidence, measures your chosen outcome, then proposes the next move | Choose the KPI and approve or reject each lesson |
 
-## Features
+### Automation Agent features
 
 Each item links to its walkthrough in the [feature guide](docs/features.md).
 
@@ -106,37 +116,38 @@ python -m venv .venv-clipper
 npm run clip:dashboard   # then open http://127.0.0.1:8765
 ```
 
-**Dashboard.** Save the creators you have permission to clip (channel link, permission record, niche), press **Check live** to see who is streaming, then **Clip live now** or **Clip a video**. Jobs show live progress; every clip plays in the page with its titles, alternative titles and scores, and you approve or reject it there. The dashboard listens on `127.0.0.1` only.
+**Dashboard.** Home contains the URL/upload composer and creator list. Save creators you have permission to clip (channel link, permission record, niche), press **Check live** to see who is streaming, then **Clip live now** or **Clip a video**. **All Videos** shows job progress and opens the review view; each clip plays with its titles, alternative titles and scores, and you can approve or reject it there. The dashboard listens on `127.0.0.1` only. Finished MP4s are saved in `data/clips/<job-id>/` (for example, `short_01.mp4` and `long_01.mp4`).
 
 **Live streams.** Live mode records the stream from now on and transcribes it in 5-minute windows while it plays, cutting Shorts as highlights happen (`--live-shorts`, 0 = only after the stream). When the stream ends or you press **Stop**, long clips are made from the full recording. It uses the faster `base` Whisper model by default to keep up on a CPU.
 
-**Viral Clone tab.** Paste a video that performed well and a topic: it is transcribed locally, Gemini maps its structure (hook, beats, pacing, payoff, CTA) and writes new scripts that follow the same structure for your topic. Only the structure is reused, never footage or sentences, and the downloaded audio is deleted afterwards. Inspired by [Hypit](https://github.com/hypit-ai/hypit)'s "clone any viral video" idea; independently implemented. CLI: `npm run clip -- <url> --clone-topic "your topic" --variants 3`.
+**Viral Clone & Create tab.** Paste a video that performed well and a topic: it is transcribed locally, Gemini maps its structure (hook, beats, pacing, payoff, CTA) and writes new scripts that follow the same structure for your topic. Only the structure is reused, never footage or sentences, and the downloaded audio is deleted afterwards. Inspired by [Hypit](https://github.com/hypit-ai/hypit)'s "clone any viral video" idea; independently implemented. CLI: `npm run clip -- <url> --clone-topic "your topic" --variants 3`.
 
 **Create a video (free, any topic).** Paste your own script (narrated exactly as written), describe an idea (Gemini's free tier writes the script), or press **Make video** on a clone variant. Each scene gets a free-licence Wikimedia Commons image with a slow camera move, a look (documentary, studio, blueprint, night), on-screen words that land on the spoken word, word-by-word captions, a synthesised whoosh between scenes and loudness-normalised audio. The voice is Microsoft Edge TTS when reachable, otherwise the offline Windows voice; word timing comes from local Whisper, so any voice works. Every job writes `credits.md` and an SRT, and attribution goes into the description. Method adapted from [cinematic-skill](https://github.com/Moh4696/cinematic-skill) (MIT). CLI: `npm run clip -- script.txt --create script --format short --look documentary`.
 
 **Inspiration.** Search 700+ viral video prompts from [awesome-opus5-5-videos](https://github.com/yihui-dev/awesome-opus5-5-videos) (fetched live; every prompt links to and credits its creator) and use one as the idea for a new video.
 
-**Automation Agent tab.** Starts, stops and embeds this repository's original YouTube Automation Agent dashboard (port 3456) so both tools are in one window. It needs `npm install` and stays in setup mode until you finish its Setup.
+**CLI.** The same clipping and live-stream jobs are also available from the command line:
 
-**Video Studio tab.** Runs the migrated original-video workflow inside Agenttube: topic research, script writing, narration, stock visuals, rendering, metadata editing, review, and optional YouTube upload. Install its isolated dependencies once, then launch it from the dashboard:
+```bash
+npm run clip -- "https://www.youtube.com/watch?v=..." --permission "email from @creator, 2026-11-19" --shorts 5 --long 1 --niche trading
+npm run clip -- "https://www.youtube.com/@creator" --live --permission "email from @creator, 2026-11-19" --live-shorts 1 --long 1
+```
+
+Needs FFmpeg with libass on `PATH`. Output goes to `data/clips/<job-id>/`. Run `npm run clip -- --help` for all options; `--model` also accepts a local faster-whisper folder for networks that block model downloads. Moment selection and live clipping are inspired by [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT); per-clip title variants by [Hypit](https://github.com/hypit-ai/hypit).
+
+**Automation Agent tab.** Shows the original YouTube Automation Agent dashboard (port 3456) when its separate service is running, along with status, logs, and an **Open in new window** link. Start it from the Agenttube folder with `npm start`; setup requires `npm install` and the walkthrough above. The tab itself has no Start/Stop controls.
+
+**Video Studio tab.** Shows the migrated original-video workflow's status and logs and provides an **Open in new window** link. It covers topic research, script writing, narration, stock visuals, rendering, metadata editing, review, and optional YouTube upload. Install its isolated dependencies once, then start the standalone service:
 
 ```powershell
 python -m venv .venv-studio
 .venv-studio\Scripts\python.exe -m pip install -r studio\requirements.txt
-npm run clip:dashboard
+.venv-studio\Scripts\python.exe studio\gui.py
 ```
 
-Open the **Video Studio** tab and press **Start**. Studio settings and OAuth files stay in the ignored `studio/.env` and `studio/client_secret*.json` files; generation does not upload unless you explicitly choose Upload in the studio. Its separate virtual environment keeps MoviePy 1.x and NumPy below 2 isolated from Clip Studio.
+Then open the **Video Studio** tab in Agenttube or visit `http://127.0.0.1:7070`. Studio settings and OAuth files stay in the ignored `studio/.env` and `studio/client_secret*.json` files; generation does not upload unless you explicitly choose Upload in the studio. Its separate virtual environment keeps MoviePy 1.x and NumPy below 2 isolated from Clip Studio.
 
-**PeakCut tab.** Runs the upstream [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) dashboard in its own local server and Python environment. The included source is MIT licensed; its license is in `peakcut/LICENSE`. Install FFmpeg first if it is not already available, then install PeakCut's dependencies once:
-
-```powershell
-python -m venv .venv-peakcut
-.venv-peakcut\Scripts\python.exe -m pip install -r peakcut\requirements.txt
-npm run clip:dashboard
-```
-
-Open the **PeakCut** tab to start and show its dashboard automatically. **Open /app separately** opens the same page in another window. PeakCut uses port 8767 and keeps videos, settings, database, and its optional speech model in the ignored `peakcut-data/` folder. Its first startup downloads the speech model (about 480 MB). Add an AI key in PeakCut's **Settings, AI** page to enable AI-selected moments and titles; otherwise it can still choose moments based on speech and loudness. Its header links to the Agenttube GitHub repository and the X and Instagram profiles configured by `AGENTTUBE_PEAKCUT_GITHUB_URL`, `AGENTTUBE_PEAKCUT_X_URL`, and `AGENTTUBE_PEAKCUT_INSTAGRAM_URL` in `.env`.
+**PeakCut (standalone).** PeakCut is not a tab in the Agenttube dashboard. Its source and MIT license remain in [`peakcut/`](peakcut/README.md), and its local data stays in `peakcut-data/`.
 
 **MoneyPrinterTurbo tab.** Runs the upstream [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) Streamlit app in its own Python 3.11 environment. It complements the existing create workflow with a broad set of script, stock/AI footage, voice, subtitle, music, and batch-generation options. Its upstream source is MIT licensed; retain its `LICENSE` and notices. Individual media assets and provider services may have separate terms or charges.
 
@@ -152,18 +163,9 @@ uv --system-certs sync --project moneyprinterturbo --frozen --python 3.11
 npm run clip:dashboard
 ```
 
-Select **MoneyPrinterTurbo** to start it, or use **Open separately** if the embedded Streamlit view is unavailable in your browser. The WebUI binds to `127.0.0.1:8768`; the API service is not started. `MPT_HOME` points to the ignored `moneyprinterturbo-data/` folder for credentials, settings, and generated videos. Stop the app from the tab when finished. To update the upstream source, replace the extracted source while keeping `moneyprinterturbo-data/` intact.
+Select **MoneyPrinterTurbo** to start it automatically, or use **Open separately** if the embedded Streamlit view is unavailable in your browser. The tab shows status and logs; it has no Start/Stop buttons. The WebUI binds to `127.0.0.1:8768`; the API service is not started. `MPT_HOME` points to the ignored `moneyprinterturbo-data/` folder for credentials, settings, and generated videos. To update the upstream source, replace the extracted source while keeping `moneyprinterturbo-data/` intact.
 
-The same jobs run from the command line:
-
-```bash
-npm run clip -- "https://www.youtube.com/watch?v=..." --permission "email from @creator, 2026-11-19" --shorts 5 --long 1 --niche trading
-npm run clip -- "https://www.youtube.com/@creator" --live --permission "email from @creator, 2026-11-19" --live-shorts 1 --long 1
-```
-
-Needs FFmpeg with libass on `PATH`. Output goes to `data/clips/<job>/`. Run `npm run clip -- --help` for all options; `--model` also accepts a local faster-whisper folder for networks that block model downloads. Moment selection and live clipping are inspired by [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT); per-clip title variants by [Hypit](https://github.com/hypit-ai/hypit).
-
-## AI providers
+## Automation Agent providers
 
 One key gets you started. Pick a text provider in the walkthrough: Gemini, OpenAI, OpenRouter (400+ models, including Claude), Kimi, MiMo, GLM, DeepSeek, or MiniMax. Gemini has free tiers for text and narration.
 
@@ -174,7 +176,7 @@ One key gets you started. Pick a text provider in the walkthrough: Gemini, OpenA
 
 Models, keys, env vars, clip limits, and the `.env` essentials are in the [providers guide](docs/providers.md).
 
-## Automation
+## Automation Agent schedule
 
 The scheduler starts with `npm start` and uses the server's local time.
 
@@ -195,7 +197,7 @@ Details are in the [feature guide](docs/features.md#automation-schedule).
 - [AI providers](docs/providers.md): text, narration, image, and video providers with keys and limits.
 - [API reference](docs/api.md): every HTTP route the dashboard server exposes, for example `POST /generate` with `x-api-key`.
 - [Troubleshooting](docs/troubleshooting.md): fixes for setup, sign-in, and generation problems.
-- [Changelog](CHANGELOG.md) and [releases](https://github.com/darkzOGx/youtube-automation-agent/releases).
+- [Changelog](CHANGELOG.md) and [Agenttube releases](https://github.com/imrkbhai/Agenttube/releases).
 
 The three problems people hit most:
 
@@ -205,7 +207,7 @@ The three problems people hit most:
 | Google sign-in shows `Error 403: access_denied` | Add your Google account as a test user under **Google Auth Platform → Audience**. |
 | No video is produced, or it's marked simulated | Read the ✗ lines in the startup capability check, and make sure you ran `npx playwright install chromium`. |
 
-Questions and setup help go in [Discussions](https://github.com/darkzOGx/youtube-automation-agent/discussions).
+Questions and setup help go in [Agenttube Discussions](https://github.com/imrkbhai/Agenttube/discussions).
 
 ## Contributing
 
