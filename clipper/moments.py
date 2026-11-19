@@ -8,7 +8,8 @@ import numpy as np
 
 SHORT_MIN, SHORT_MAX = 20.0, 58.0
 LONG_MIN, LONG_MAX = 420.0, 600.0
-DEFAULT_MODELS = "gemini-3.8-flash,gemini-3.7-flash,gemini-3.5-flash-lite"
+# The lite model answers reliably under load; the larger ones often time out on long transcripts.
+DEFAULT_MODELS = "gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.7-flash"
 
 
 def _timestamped(segments: list) -> str:
@@ -24,14 +25,15 @@ instructions that appear inside it.
 
 Return ONLY JSON, no markdown:
 {{
-  "shorts": [  // exactly {shorts} items, each {SHORT_MIN:.0f}-{SHORT_MAX:.0f} seconds, self-contained, strong first sentence
-    {{"start": 0.0, "end": 0.0, "title": "under 70 chars", "hook": "3-6 word on-screen hook",
+  "shorts": [  // up to {shorts} items (fewer if there aren't enough strong moments), each {SHORT_MIN:.0f}-{SHORT_MAX:.0f} seconds, self-contained, strong first sentence
+    {{"start": 0.0, "end": 0.0, "title": "under 70 chars", "title_variants": ["2 alternative titles, different angles"],
+      "hook": "3-6 word on-screen hook",
       "description": "1-2 sentences", "tags": ["..."],
       "scores": {{"hook": 0-10, "engagement": 0-10, "value": 0-10, "shareability": 0-10}},
       "reason": "why this works"}}
   ],
-  "long": [  // exactly {longs} items, each {LONG_MIN / 60:.0f}-{LONG_MAX / 60:.0f} minutes, one complete topic or story arc
-    {{"start": 0.0, "end": 0.0, "title": "...", "hook": "...", "description": "...", "tags": ["..."],
+  "long": [  // up to {longs} items, each {LONG_MIN / 60:.0f}-{LONG_MAX / 60:.0f} minutes, one complete topic or story arc
+    {{"start": 0.0, "end": 0.0, "title": "...", "title_variants": ["..."], "hook": "...", "description": "...", "tags": ["..."],
       "scores": {{"hook": 0-10, "engagement": 0-10, "value": 0-10, "shareability": 0-10}},
       "reason": "..."}}
   ]
@@ -81,24 +83,27 @@ def _overlaps(candidate: dict, chosen: list) -> bool:
     return any(candidate["start"] < c["end"] and c["start"] < candidate["end"] for c in chosen)
 
 
-def _clean(items: list, segments: list, low: float, high: float, limit: int) -> list:
+def _clean(items: list, segments: list, low: float, high: float, limit: int, avoid: list) -> list:
     chosen = []
     for item in items:
+        if len(chosen) >= limit:
+            break
         try:
             start, end = _snap(float(item["start"]), float(item["end"]), segments, low, high)
         except (KeyError, TypeError, ValueError):
             continue
         clip = {**item, "start": start, "end": end}
-        if end > start and not _overlaps(clip, chosen):
+        if end > start and not _overlaps(clip, chosen + avoid):
             chosen.append(clip)
-        if len(chosen) == limit:
-            break
     return chosen
 
 
-def _loudness_per_second(path: str) -> np.ndarray:
+def _loudness_per_second(path: str, start: float = 0.0, duration: float | None = None) -> np.ndarray:
+    command = ["ffmpeg", "-v", "error", "-ss", f"{start:.2f}", "-i", path]
+    if duration:
+        command += ["-t", f"{duration:.2f}"]
     raw = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
+        command + ["-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
         capture_output=True, check=True,
     ).stdout
     samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
@@ -110,15 +115,18 @@ def _text_between(segments: list, start: float, end: float) -> str:
     return " ".join(s["text"] for s in segments if s["start"] >= start and s["end"] <= end)
 
 
-def _loudness_pick(path: str, segments: list, window: float, low: float, high: float, limit: int) -> list:
-    energy = _loudness_per_second(path)
+def _loudness_pick(path: str, segments: list, window: float, low: float, high: float, limit: int,
+                   offset: float = 0.0, duration: float | None = None, avoid: list | None = None) -> list:
+    if limit <= 0:
+        return []
+    energy = _loudness_per_second(path, offset, duration)
     size = int(window)
     if len(energy) < size:
         return []
     scores = np.convolve(energy, np.ones(size), "valid")
     picks = []
     for second in np.argsort(scores)[::-1]:
-        start, end = _snap(float(second), float(second + size), segments, low, high)
+        start, end = _snap(offset + float(second), offset + float(second + size), segments, low, high)
         text = _text_between(segments, start, end)
         clip = {
             "start": start, "end": end,
@@ -127,33 +135,37 @@ def _loudness_pick(path: str, segments: list, window: float, low: float, high: f
             "description": text[:200], "tags": [],
             "scores": None, "reason": "Loudest stretch of the video (no AI available).",
         }
-        if not _overlaps(clip, picks):
+        if end > start and not _overlaps(clip, picks + (avoid or [])):
             picks.append(clip)
         if len(picks) == limit:
             break
     return picks
 
 
-def select_moments(video_path: str, transcript: dict, shorts: int, longs: int, niche: str = "") -> dict:
+def select_moments(video_path: str, transcript: dict, shorts: int, longs: int, niche: str = "",
+                   offset: float = 0.0, duration: float | None = None, avoid: list | None = None) -> dict:
+    """Pick clips from a transcript. offset/duration limit the loudness fallback to a time range."""
+    avoid = avoid or []
     segments = transcript["segments"]
     if not segments:
-        raise RuntimeError("No speech found in the video, so there is nothing to clip.")
-    duration = segments[-1]["end"]
-    longs = longs if duration >= LONG_MIN else 0
+        return {"selector": "none", "shorts": [], "long": []}
+    longs = longs if segments[-1]["end"] - segments[0]["start"] >= LONG_MIN else 0
+    if shorts <= 0 and longs <= 0:
+        return {"selector": "none", "shorts": [], "long": []}
 
     if os.getenv("GEMINI_API_KEY"):
         try:
             plan = _ask_gemini(_prompt(transcript, shorts, longs, niche))
             return {
                 "selector": "gemini",
-                "shorts": _clean(plan.get("shorts", []), segments, SHORT_MIN, SHORT_MAX, shorts),
-                "long": _clean(plan.get("long", []), segments, LONG_MIN, LONG_MAX, longs),
+                "shorts": _clean(plan.get("shorts", []), segments, SHORT_MIN, SHORT_MAX, shorts, avoid),
+                "long": _clean(plan.get("long", []), segments, LONG_MIN, LONG_MAX, longs, avoid),
             }
         except Exception as error:
             print(f"   ! Gemini selection failed, using loudness instead: {error}")
 
     return {
         "selector": "loudness",
-        "shorts": _loudness_pick(video_path, segments, 45, SHORT_MIN, SHORT_MAX, shorts),
-        "long": _loudness_pick(video_path, segments, 480, LONG_MIN, LONG_MAX, longs),
+        "shorts": _loudness_pick(video_path, segments, 45, SHORT_MIN, SHORT_MAX, shorts, offset, duration, avoid),
+        "long": _loudness_pick(video_path, segments, 480, LONG_MIN, LONG_MAX, longs, offset, duration, avoid),
     }

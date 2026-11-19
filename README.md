@@ -103,10 +103,21 @@ Turn a long video (yours, or another creator's **with their permission**) into r
 ```bash
 python -m venv .venv-clipper
 .venv-clipper/Scripts/pip install -r clipper/requirements.txt   # macOS/Linux: .venv-clipper/bin/pip
-npm run clip -- "https://www.youtube.com/watch?v=..." --permission "email from @creator, 2026-11-19" --shorts 5 --long 1 --niche trading
+npm run clip:dashboard   # then open http://127.0.0.1:8765
 ```
 
-Needs FFmpeg with libass on `PATH`. Output goes to `data/clips/<job>/`. Run `npm run clip -- --help` for all options; `--model` also accepts a local faster-whisper folder for networks that block model downloads. Moment selection is inspired by [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT).
+**Dashboard.** Save the creators you have permission to clip (channel link, permission record, niche), press **Check live** to see who is streaming, then **Clip live now** or **Clip a video**. Jobs show live progress; every clip plays in the page with its titles, alternative titles and scores, and you approve or reject it there. The dashboard listens on `127.0.0.1` only.
+
+**Live streams.** Live mode records the stream from now on and transcribes it in 5-minute windows while it plays, cutting Shorts as highlights happen (`--live-shorts`, 0 = only after the stream). When the stream ends or you press **Stop**, long clips are made from the full recording. It uses the faster `base` Whisper model by default to keep up on a CPU.
+
+The same jobs run from the command line:
+
+```bash
+npm run clip -- "https://www.youtube.com/watch?v=..." --permission "email from @creator, 2026-11-19" --shorts 5 --long 1 --niche trading
+npm run clip -- "https://www.youtube.com/@creator" --live --permission "email from @creator, 2026-11-19" --live-shorts 1 --long 1
+```
+
+Needs FFmpeg with libass on `PATH`. Output goes to `data/clips/<job>/`. Run `npm run clip -- --help` for all options; `--model` also accepts a local faster-whisper folder for networks that block model downloads. Moment selection and live clipping are inspired by [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT); per-clip title variants by [Hypit](https://github.com/hypit-ai/hypit).
 
 ## AI providers
 

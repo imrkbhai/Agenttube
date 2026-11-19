@@ -10,7 +10,11 @@ const venvPython = process.platform === 'win32'
   : path.join(root, '.venv-clipper', 'bin', 'python');
 const python = process.env.CLIPPER_PYTHON || (fs.existsSync(venvPython) ? venvPython : 'python');
 
-const child = spawn(python, ['-m', 'clipper', ...process.argv.slice(2)], {
+const args = process.argv.slice(2);
+// `npm run clip:dashboard` passes "dashboard" to open the local web UI instead of the CLI.
+const moduleArgs = args[0] === 'dashboard' ? ['-m', 'clipper.dashboard'] : ['-m', 'clipper', ...args];
+
+const child = spawn(python, moduleArgs, {
   cwd: root,
   stdio: 'inherit',
   env: { ...process.env, PYTHONIOENCODING: 'utf-8', HF_HUB_DISABLE_SYMLINKS_WARNING: '1' }

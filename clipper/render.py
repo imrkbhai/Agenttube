@@ -1,4 +1,5 @@
 """Render clips with FFmpeg: 9:16 Shorts (face-centred crop) and 16:9 long clips, with burned-in captions."""
+import json
 import subprocess
 from pathlib import Path
 
@@ -85,6 +86,19 @@ def write_captions(path: Path, words: list, clip_start: float, clip_end: float, 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _probe(video_path: str) -> tuple[float, bool]:
+    """The file's first timestamp and whether it has an audio stream."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=start_time:stream=codec_type",
+         "-of", "json", video_path],
+        capture_output=True, text=True, check=True,
+    )
+    info = json.loads(result.stdout)
+    start = float(info.get("format", {}).get("start_time") or 0)
+    has_audio = any(s.get("codec_type") == "audio" for s in info.get("streams", []))
+    return start, has_audio
+
+
 def face_center_x(video_path: str, start: float, end: float, samples: int = 12) -> float:
     """Median horizontal face position (0-1) across the clip; 0.5 when no face is found."""
     detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
@@ -126,12 +140,23 @@ def render(video_path: str, out_dir: Path, name: str, start: float, end: float, 
         )
 
     output = out_dir / f"{name}.mp4"
+    file_start, has_audio = _probe(video_path)
+    # Transcript times are relative to the file's first timestamp; live MPEG-TS recordings don't start at 0.
+    cut_start, cut_end = file_start + start, file_start + end
+    pre_roll = min(start, 15.0)
+    graph = (f"[0:v]trim=start={cut_start:.3f}:end={cut_end:.3f},setpts=PTS-STARTPTS,"
+             f"{crop},ass={captions.name}[v]")
+    maps = ["-map", "[v]"]
+    if has_audio:
+        graph += f";[0:a]atrim=start={cut_start:.3f}:end={cut_end:.3f},asetpts=PTS-STARTPTS[a]"
+        maps += ["-map", "[a]"]
+    # Fast-seek just before the clip, keep the original timestamps, then trim to the exact frame.
     # Run inside out_dir so the subtitle filter gets a relative path (Windows drive colons break it).
     subprocess.run(
         [
-            "ffmpeg", "-y", "-v", "error", "-ss", f"{start:.2f}", "-to", f"{end:.2f}",
+            "ffmpeg", "-y", "-v", "error", "-ss", f"{start - pre_roll:.2f}", "-copyts",
             "-i", str(Path(video_path).resolve()),
-            "-vf", f"{crop},ass={captions.name}",
+            "-filter_complex", graph, *maps,
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
             "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart",
             output.name,

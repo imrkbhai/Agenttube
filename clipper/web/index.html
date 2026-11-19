@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip Studio</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e7e9ee; --muted:#8b93a7; --accent:#ffd400; --ok:#2ecc71; --bad:#ff5c5c; --live:#ff3b3b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; align-items:center; gap:12px; padding:14px 24px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:18px; }
+  header .hint { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns: 380px 1fr; gap:20px; padding:20px 24px; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:20px; }
+  h2 { font-size:15px; margin:0 0 12px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  input, select, textarea { width:100%; background:#0c0e12; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  button { background:#232835; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:#3a4152; }
+  button.primary { background:var(--accent); color:#111; border-color:var(--accent); font-weight:600; }
+  button.danger { color:var(--bad); }
+  button.small { padding:4px 8px; font-size:12px; }
+  .creator { border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:10px; }
+  .creator .name { font-weight:600; display:flex; align-items:center; gap:8px; }
+  .creator .meta { color:var(--muted); font-size:12px; word-break:break-all; }
+  .creator .actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .badge { font-size:11px; padding:2px 7px; border-radius:20px; background:#232835; color:var(--muted); white-space:nowrap; }
+  .badge.live { background:var(--live); color:#fff; }
+  .badge.running, .badge.queued, .badge.stopping { background:#1d3557; color:#9cc9ff; }
+  .badge.finished { background:#163d2a; color:var(--ok); }
+  .badge.failed, .badge.stopped { background:#3d1616; color:var(--bad); }
+  .badge.approved { background:#163d2a; color:var(--ok); }
+  .badge.rejected { background:#3d1616; color:var(--bad); }
+  table { width:100%; border-collapse:collapse; }
+  td, th { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  tr.job { cursor:pointer; } tr.job:hover { background:#1c2029; } tr.job.selected { background:#202634; }
+  .muted { color:var(--muted); }
+  .clips { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
+  .clip { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#12151b; }
+  .clip video { width:100%; display:block; background:#000; max-height:420px; }
+  .clip .body { padding:10px; }
+  .clip .title { font-weight:600; margin-bottom:4px; }
+  .clip .desc { color:var(--muted); font-size:12px; white-space:pre-wrap; max-height:90px; overflow:auto; }
+  .clip .actions { display:flex; gap:6px; margin-top:8px; }
+  pre.log { background:#0c0e12; border:1px solid var(--line); border-radius:6px; padding:10px; max-height:220px; overflow:auto; font-size:12px; white-space:pre-wrap; }
+  .notice { font-size:12px; color:var(--muted); border-left:3px solid var(--accent); padding-left:8px; margin-top:10px; }
+  .error { color:var(--bad); font-size:12px; min-height:16px; margin-top:6px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Clip Studio</h1>
+  <span class="hint">Local dashboard · clips are saved for review, nothing is uploaded</span>
+</header>
+<main>
+  <div>
+    <section>
+      <h2>Creators</h2>
+      <div id="creators"></div>
+      <details id="creator-form-box">
+        <summary>Add creator</summary>
+        <form id="creator-form">
+          <input type="hidden" name="id">
+          <label>Name</label><input name="name" required maxlength="100">
+          <label>Channel link (YouTube @handle, Twitch, Kick…)</label><input name="channel_url" required placeholder="https://www.youtube.com/@creator">
+          <label>Permission record</label><input name="permission" required maxlength="300" placeholder="email from @creator, 2026-11-19">
+          <label>Niche (optional)</label><input name="niche" maxlength="100" placeholder="GTA6">
+          <div class="row" style="margin-top:10px"><button class="primary" type="submit">Save creator</button></div>
+          <div class="error" id="creator-error"></div>
+        </form>
+      </details>
+    </section>
+
+    <section>
+      <h2>New clipping job</h2>
+      <form id="job-form">
+        <label>Mode</label>
+        <select name="mode">
+          <option value="video">Video (published or finished stream)</option>
+          <option value="live">Live stream (record and clip while it plays)</option>
+        </select>
+        <label>Creator</label>
+        <select name="creator_id"><option value="">— manual —</option></select>
+        <label>Video, stream, or channel link</label><input name="url" required placeholder="https://www.youtube.com/watch?v=…">
+        <label>Permission record</label><input name="permission" required maxlength="300">
+        <div class="row">
+          <div><label>Creator name</label><input name="creator" maxlength="100"></div>
+          <div><label>Niche</label><input name="niche" maxlength="100"></div>
+        </div>
+        <div class="row">
+          <div><label>Shorts</label><input name="shorts" type="number" min="0" max="20" value="5"></div>
+          <div><label>Long (7–10 min)</label><input name="long" type="number" min="0" max="5" value="1"></div>
+          <div class="live-only hidden"><label>Shorts / 5 min live</label><input name="live_shorts" type="number" min="0" max="5" value="1"></div>
+        </div>
+        <label>Whisper model</label>
+        <select name="model">
+          <option value="">Default (small, base for live)</option>
+          <option value="base">base — fastest</option>
+          <option value="small">small — better accuracy</option>
+          <option value="medium">medium — slow on CPU</option>
+        </select>
+        <p class="notice live-only hidden">Live mode records from now on. Shorts are cut every 5 minutes; when the stream ends or you press Stop, long clips are made from the full recording. Set "Shorts / 5 min live" to 0 to clip only after the stream ends.</p>
+        <div class="row" style="margin-top:12px"><button class="primary" type="submit">Start clipping</button></div>
+        <div class="error" id="job-error"></div>
+      </form>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Jobs</h2>
+      <table>
+        <thead><tr><th>Started</th><th>Type</th><th>Source</th><th>Status</th><th>Clips</th></tr></thead>
+        <tbody id="jobs"></tbody>
+      </table>
+      <p class="muted" id="no-jobs">No jobs yet.</p>
+    </section>
+
+    <section id="detail" class="hidden">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
+        <h2 id="detail-title" style="margin:0"></h2>
+        <button class="danger" id="stop-btn">Stop</button>
+      </div>
+      <p class="muted" id="detail-meta"></p>
+      <div class="clips" id="clips"></div>
+      <details style="margin-top:14px"><summary>Log</summary><pre class="log" id="log"></pre></details>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+let creators = [];
+let selectedJob = null;
+const renderedClips = new Map();
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'class') node.className = value;
+    else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+    else node[key] = value;
+  }
+  for (const child of children) if (child != null) node.append(child);
+  return node;
+}
+
+async function api(path, body) {
+  const response = await fetch(path, body === undefined ? {} : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+
+function badge(text, cls) { return el('span', { class: `badge ${cls || text}`, textContent: text }); }
+
+// ── creators ──
+async function loadCreators() {
+  creators = await api('/api/creators');
+  const list = $('#creators');
+  list.replaceChildren();
+  if (!creators.length) list.append(el('p', { class: 'muted', textContent: 'Add the creators you have permission to clip.' }));
+  for (const creator of creators) {
+    const status = el('span');
+    list.append(el('div', { class: 'creator' },
+      el('div', { class: 'name' }, creator.name, status),
+      el('div', { class: 'meta', textContent: creator.channel_url }),
+      el('div', { class: 'meta', textContent: `Permission: ${creator.permission}${creator.niche ? ' · ' + creator.niche : ''}` }),
+      el('div', { class: 'actions' },
+        el('button', { class: 'small', textContent: 'Check live', onclick: () => checkLive(creator, status) }),
+        el('button', { class: 'small primary', textContent: 'Clip live now', onclick: () => fillJob(creator, 'live', creator.channel_url) }),
+        el('button', { class: 'small', textContent: 'Clip a video', onclick: () => fillJob(creator, 'video', '') }),
+        el('button', { class: 'small', textContent: 'Edit', onclick: () => editCreator(creator) }),
+        el('button', { class: 'small danger', textContent: 'Delete', onclick: () => deleteCreator(creator) }),
+      )));
+  }
+  const select = $('#job-form [name=creator_id]');
+  const current = select.value;
+  select.replaceChildren(el('option', { value: '', textContent: '— manual —' }),
+    ...creators.map(c => el('option', { value: c.id, textContent: c.name })));
+  select.value = current;
+}
+
+async function checkLive(creator, status) {
+  status.replaceChildren(badge('checking…', ''));
+  try {
+    const result = await api('/api/live-status', { url: creator.channel_url });
+    status.replaceChildren(result.live ? badge('LIVE', 'live') : badge(result.status === 'is_upcoming' ? 'upcoming' : 'offline', ''));
+    if (result.live) status.title = result.title || '';
+  } catch (error) { status.replaceChildren(badge('error', 'failed')); status.title = error.message; }
+}
+
+function editCreator(creator) {
+  const form = $('#creator-form');
+  for (const key of ['id', 'name', 'channel_url', 'permission', 'niche']) form[key].value = creator[key] || '';
+  $('#creator-form-box').open = true;
+}
+
+async function deleteCreator(creator) {
+  if (!confirm(`Remove ${creator.name}? Their clips stay on disk.`)) return;
+  await api('/api/creators/delete', { id: creator.id });
+  loadCreators();
+}
+
+$('#creator-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  $('#creator-error').textContent = '';
+  try {
+    await api('/api/creators', Object.fromEntries(new FormData(form)));
+    form.reset(); form.id.value = '';
+    loadCreators();
+  } catch (error) { $('#creator-error').textContent = error.message; }
+});
+
+// ── jobs ──
+function fillJob(creator, mode, url) {
+  const form = $('#job-form');
+  form.mode.value = mode; form.creator_id.value = creator.id; form.url.value = url;
+  form.permission.value = creator.permission; form.creator.value = creator.name; form.niche.value = creator.niche || '';
+  toggleLive();
+  form.url.focus();
+}
+
+function toggleLive() {
+  const live = $('#job-form [name=mode]').value === 'live';
+  document.querySelectorAll('.live-only').forEach(node => node.classList.toggle('hidden', !live));
+}
+$('#job-form [name=mode]').addEventListener('change', toggleLive);
+$('#job-form [name=creator_id]').addEventListener('change', (event) => {
+  const creator = creators.find(c => c.id === event.target.value);
+  if (creator) fillJob(creator, $('#job-form [name=mode]').value,
+    $('#job-form [name=mode]').value === 'live' ? creator.channel_url : $('#job-form [name=url]').value);
+});
+
+$('#job-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  $('#job-error').textContent = '';
+  const data = Object.fromEntries(new FormData(event.target));
+  delete data.creator_id;
+  try {
+    const job = await api('/api/jobs', data);
+    selectedJob = job.id;
+    loadJobs();
+  } catch (error) { $('#job-error').textContent = error.message; }
+});
+
+function when(iso) { return iso ? new Date(iso).toLocaleString() : ''; }
+
+async function loadJobs() {
+  const jobs = await api('/api/jobs');
+  $('#no-jobs').classList.toggle('hidden', jobs.length > 0);
+  $('#jobs').replaceChildren(...jobs.map(job => el('tr', {
+      class: `job${job.id === selectedJob ? ' selected' : ''}`,
+      onclick: () => { selectedJob = job.id; loadJobs(); }
+    },
+    el('td', { textContent: when(job.created_at) }),
+    el('td', {}, job.kind === 'live' ? badge('live', 'live') : badge('video', '')),
+    el('td', {}, el('div', { textContent: job.title || job.source_url || '' }),
+      el('div', { class: 'muted', textContent: job.creator || '' })),
+    el('td', {}, badge(job.state || 'unknown'), el('div', { class: 'muted', textContent: job.stage || '' })),
+    el('td', { textContent: `${job.counts.total} (${job.counts.approved} ✓ ${job.counts.rejected} ✗)` }),
+  )));
+  if (selectedJob) loadDetail();
+}
+
+async function loadDetail() {
+  let data;
+  try { data = await api(`/api/jobs/${selectedJob}`); } catch { return; }
+  const { job, source, permission, clips } = data;
+  $('#detail').classList.remove('hidden');
+  $('#detail-title').textContent = job.title || job.source_url || job.id;
+  $('#detail-meta').textContent = [
+    source?.creator && `by ${source.creator}`, permission && `permission: ${permission}`,
+    job.stage, job.error && `error: ${job.error}`
+  ].filter(Boolean).join(' · ');
+  $('#stop-btn').classList.toggle('hidden', !['running', 'queued'].includes(job.state));
+  $('#log').textContent = data.log;
+
+  const box = $('#clips');
+  if (box.dataset.job !== selectedJob) { box.replaceChildren(); renderedClips.clear(); box.dataset.job = selectedJob; }
+  for (const clip of clips) {
+    const key = clip.file;
+    if (!renderedClips.has(key)) {
+      const status = el('span');
+      const card = el('div', { class: 'clip' },
+        el('video', { src: `/media/${selectedJob}/${clip.file}`, controls: true, preload: 'metadata' }),
+        el('div', { class: 'body' },
+          el('div', { class: 'title', textContent: clip.title || clip.file }),
+          clip.title_variants?.length ? el('div', { class: 'muted', style: 'font-size:12px', textContent: 'Alt titles: ' + clip.title_variants.join(' | ') }) : null,
+          el('div', { class: 'muted', textContent:
+            `${clip.format === 'short' ? 'Short' : 'Long'} · ${Math.round(clip.duration)}s · ${clip.selector || ''}` +
+            (clip.scores ? ` · hook ${clip.scores.hook} · value ${clip.scores.value}` : '') }),
+          el('div', { class: 'desc', textContent: clip.description || '' }),
+          el('div', { class: 'actions' }, status,
+            el('button', { class: 'small', textContent: 'Approve', onclick: () => review(clip.file, 'approved') }),
+            el('button', { class: 'small danger', textContent: 'Reject', onclick: () => review(clip.file, 'rejected') }),
+            el('button', { class: 'small', textContent: 'Undo', onclick: () => review(clip.file, 'pending_review') }))));
+      renderedClips.set(key, status);
+      box.append(card);
+    }
+    renderedClips.get(key).replaceChildren(badge(clip.status === 'pending_review' ? 'pending' : clip.status, clip.status));
+  }
+}
+
+async function review(file, status) {
+  await api(`/api/jobs/${selectedJob}/review`, { file, status });
+  loadDetail(); loadJobs();
+}
+
+$('#stop-btn').addEventListener('click', async () => {
+  if (!confirm('Stop this job? Live jobs finish the recording and still make the long clips.')) return;
+  await api(`/api/jobs/${selectedJob}/stop`, {});
+  loadJobs();
+});
+
+loadCreators();
+loadJobs();
+setInterval(loadJobs, 4000);
+</script>
+</body>
+</html>
