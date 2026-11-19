@@ -2,6 +2,9 @@
 node_modules/
 .tools/
 .venv-clipper/
+.venv-studio/
+.venv-peakcut/
+peakcut-data/
 __pycache__/
 npm-debug.log*
 yarn-debug.log*
@@ -11,6 +14,12 @@ yarn-error.log*
 .env
 .env.local
 .env.production
+studio/.env
+studio/client_secret*.json
+studio/youtube_token.pickle
+studio/*.pickle
+studio/output/
+studio/automation.log
 config/credentials.json
 config/tokens.json
 config/*.key
@@ -74,6 +83,7 @@ build/
 *.gif
 !examples/*.png
 !examples/*.jpg
+!studio/docs/screenshots/*.png
 !assets/screenshots/*.png
 !assets/youtube-automation-agent.jpg
 

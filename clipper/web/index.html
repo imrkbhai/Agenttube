@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clip Studio</title>
+<title>Agenttube</title>
 <style>
   :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e7e9ee; --muted:#8b93a7; --accent:#ffd400; --ok:#2ecc71; --bad:#ff5c5c; --live:#ff3b3b; }
   * { box-sizing: border-box; }
@@ -57,16 +57,21 @@
   .variant ol { margin:8px 0 0; padding-left:20px; }
   .variant li { margin-bottom:6px; }
   iframe.agent { width:100%; height:calc(100vh - 230px); min-height:500px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  iframe.video-studio { width:100%; height:calc(100vh - 300px); min-height:600px; border:1px solid var(--line); border-radius:8px; background:#09090f; }
+  iframe.peakcut { width:100%; height:calc(100vh - 300px); min-height:650px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  @media (max-width: 640px) { #tab-clone { grid-template-columns: 1fr; } }
   main.single { grid-template-columns: 1fr; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Clip Studio</h1>
+  <h1>Agenttube</h1>
   <nav class="tabs">
     <button data-tab="studio" class="active">Clip Studio</button>
     <button data-tab="clone">Viral Clone &amp; Create</button>
     <button data-tab="agent">Automation Agent</button>
+    <button data-tab="video">Video Studio</button>
+    <button data-tab="peakcut">PeakCut</button>
   </nav>
   <span class="hint" style="margin-left:auto">Local dashboard · nothing is uploaded without your approval</span>
 </header>
@@ -166,6 +171,23 @@
       <p class="notice">Inspired by <a href="https://github.com/hypit-ai/hypit" target="_blank" rel="noopener" style="color:var(--accent)">Hypit</a>'s "clone any viral video" idea; this is an independent implementation.</p>
     </section>
     <section>
+      <h2>Inspiration</h2>
+      <div class="row">
+        <input id="insp-q" placeholder="Search 700+ viral video prompts…">
+        <select id="insp-cat" style="max-width:150px"><option value="">All</option><option value="explainer">Explainers</option><option value="motion">Motion graphics</option><option value="3d">3D scenes</option><option value="interactive">Interactive</option></select>
+        <button id="insp-go" style="flex:0">Search</button>
+      </div>
+      <div id="insp" style="max-height:420px; overflow:auto; margin-top:8px"></div>
+      <p class="notice">From <a href="https://github.com/yihui-dev/awesome-opus5-5-videos" target="_blank" rel="noopener" style="color:var(--accent)">awesome-opus5-5-videos</a>. Each prompt belongs to its creator — use it as inspiration and credit them.</p>
+    </section>
+    <section>
+      <h2>Clone and create jobs</h2>
+      <table><tbody id="clone-jobs"></tbody></table>
+      <p class="muted" id="no-clones">No clone jobs yet.</p>
+    </section>
+  </div>
+  <div>
+    <section>
       <h2>Create a video (free)</h2>
       <form id="create-form">
         <label>Start from</label>
@@ -200,23 +222,6 @@
       </form>
       <p class="notice">Free: free-licence Wikimedia Commons images (licences recorded in credits), offline or Edge voice, local word timing, FFmpeg. Method adapted from <a href="https://github.com/Moh4696/cinematic-skill" target="_blank" rel="noopener" style="color:var(--accent)">cinematic-skill</a> (MIT).</p>
     </section>
-    <section>
-      <h2>Inspiration</h2>
-      <div class="row">
-        <input id="insp-q" placeholder="Search 700+ viral video prompts…">
-        <select id="insp-cat" style="max-width:150px"><option value="">All</option><option value="explainer">Explainers</option><option value="motion">Motion graphics</option><option value="3d">3D scenes</option><option value="interactive">Interactive</option></select>
-        <button id="insp-go" style="flex:0">Search</button>
-      </div>
-      <div id="insp" style="max-height:420px; overflow:auto; margin-top:8px"></div>
-      <p class="notice">From <a href="https://github.com/yihui-dev/awesome-opus5-5-videos" target="_blank" rel="noopener" style="color:var(--accent)">awesome-opus5-5-videos</a>. Each prompt belongs to its creator — use it as inspiration and credit them.</p>
-    </section>
-    <section>
-      <h2>Clone and create jobs</h2>
-      <table><tbody id="clone-jobs"></tbody></table>
-      <p class="muted" id="no-clones">No clone jobs yet.</p>
-    </section>
-  </div>
-  <div>
     <section id="clone-detail" class="hidden">
       <h2 id="clone-title"></h2>
       <p class="muted" id="clone-meta"></p>
@@ -239,6 +244,38 @@
     <p class="muted" id="agent-meta">The original Agenttube dashboard (from darkzOGx/youtube-automation-agent): channel strategy, AI video generation, review, scheduling, analytics. Generation and publishing stay disabled until you finish its Setup.</p>
     <iframe class="agent hidden" id="agent-frame" title="Automation Agent"></iframe>
     <details style="margin-top:10px"><summary>Agent log</summary><pre class="log" id="agent-log"></pre></details>
+  </section>
+</main>
+
+<main id="tab-video" class="single hidden">
+  <section>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+      <h2 style="margin:0">Original Video Studio</h2>
+      <span id="video-studio-badge"></span>
+      <span style="margin-left:auto"></span>
+      <button class="primary" id="video-studio-start">Start</button>
+      <button class="danger" id="video-studio-stop">Stop</button>
+      <a id="video-studio-open" target="_blank" rel="noopener"><button>Open in new window</button></a>
+    </div>
+    <p class="muted" id="video-studio-meta">Research, script, narrate, render, edit metadata, and review in the original-video workflow. Upload remains a separate action inside the studio.</p>
+    <iframe class="video-studio hidden" id="video-studio-frame" title="Original Video Studio"></iframe>
+    <details style="margin-top:10px"><summary>Studio log</summary><pre class="log" id="video-studio-log"></pre></details>
+  </section>
+</main>
+
+<main id="tab-peakcut" class="single hidden">
+  <section>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+      <h2 style="margin:0">PeakCut</h2>
+      <span id="peakcut-badge"></span>
+      <span style="margin-left:auto"></span>
+      <button class="primary" id="peakcut-start">Start</button>
+      <button class="danger" id="peakcut-stop">Stop</button>
+      <button id="peakcut-open" type="button">Open /app separately</button>
+    </div>
+    <p class="muted">PeakCut's original dashboard, running locally with its own data folder. First startup may download its speech model (about 480 MB).</p>
+    <iframe class="peakcut hidden" id="peakcut-frame" title="PeakCut" allow="autoplay; fullscreen"></iframe>
+    <details style="margin-top:10px"><summary>PeakCut log</summary><pre class="log" id="peakcut-log"></pre></details>
   </section>
 </main>
 
@@ -441,8 +478,10 @@ let activeTab = 'studio';
 document.querySelectorAll('nav.tabs button').forEach(button => button.addEventListener('click', () => {
   activeTab = button.dataset.tab;
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === button));
-  for (const tab of ['studio', 'clone', 'agent']) $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
+  for (const tab of ['studio', 'clone', 'agent', 'video', 'peakcut']) $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
   if (activeTab === 'agent') loadAgent();
+  if (activeTab === 'video') loadVideoStudio();
+  if (activeTab === 'peakcut') startPeakcutWhenReady().catch(error => alert(error.message));
 }));
 
 // ── viral clone ──
@@ -604,6 +643,101 @@ $('#agent-stop').addEventListener('click', async () => {
 });
 
 setInterval(() => { if (activeTab === 'agent') loadAgent(); }, 8000);
+
+// ── original video studio ──
+async function loadVideoStudio() {
+  const status = await api('/api/studio');
+  $('#video-studio-open').href = status.url;
+  $('#video-studio-badge').replaceChildren(status.running
+    ? badge(status.pipeline?.running ? 'generating' : 'running', status.pipeline?.running ? 'running' : 'finished')
+    : badge(status.ready ? 'stopped' : 'source missing', 'stopped'));
+  $('#video-studio-start').classList.toggle('hidden', status.running);
+  $('#video-studio-stop').classList.toggle('hidden', !status.managed);
+  $('#video-studio-log').textContent = status.log || '';
+  const frame = $('#video-studio-frame');
+  frame.classList.toggle('hidden', !status.running);
+  if (status.running && frame.dataset.loaded !== '1') { frame.src = status.url; frame.dataset.loaded = '1'; }
+  if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
+}
+
+$('#video-studio-start').addEventListener('click', async () => {
+  try {
+    await api('/api/studio/start', {});
+    for (let i = 0; i < 40; i++) {
+      await new Promise(resolve => setTimeout(resolve, 750));
+      await loadVideoStudio();
+      if (!$('#video-studio-frame').classList.contains('hidden')) break;
+    }
+  } catch (error) { alert(error.message); }
+});
+
+$('#video-studio-stop').addEventListener('click', async () => {
+  try { await api('/api/studio/stop', {}); } catch (error) { alert(error.message); }
+  loadVideoStudio();
+});
+
+setInterval(() => { if (activeTab === 'video') loadVideoStudio(); }, 5000);
+
+// ── PeakCut ──
+async function loadPeakcut() {
+  const status = await api('/api/peakcut');
+  $('#peakcut-badge').replaceChildren(status.running
+    ? badge('running', 'finished')
+    : badge(status.ready ? 'stopped' : 'source missing', 'stopped'));
+  $('#peakcut-start').classList.toggle('hidden', status.running);
+  $('#peakcut-stop').classList.toggle('hidden', !status.managed);
+  $('#peakcut-log').textContent = status.log || '';
+  const frame = $('#peakcut-frame');
+  frame.classList.toggle('hidden', !status.running);
+  if (status.running && frame.dataset.loaded !== '1') { frame.src = `${status.url}/app`; frame.dataset.loaded = '1'; }
+  if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
+}
+
+let peakcutStartPromise = null;
+
+function startPeakcutWhenReady() {
+  if (!peakcutStartPromise) {
+    peakcutStartPromise = ensurePeakcutWhenReady().finally(() => { peakcutStartPromise = null; });
+  }
+  return peakcutStartPromise;
+}
+
+async function ensurePeakcutWhenReady() {
+  const initial = await api('/api/peakcut');
+  if (initial.running) { await loadPeakcut(); return initial.url; }
+  await api('/api/peakcut/start', {});
+  for (let i = 0; i < 80; i++) {
+    await new Promise(resolve => setTimeout(resolve, 750));
+    const status = await api('/api/peakcut');
+    await loadPeakcut();
+    if (status.running) return status.url;
+  }
+  throw new Error('PeakCut did not become ready. Check the PeakCut log below.');
+}
+
+$('#peakcut-start').addEventListener('click', async () => {
+  try { await startPeakcutWhenReady(); } catch (error) { alert(error.message); }
+});
+
+$('#peakcut-open').addEventListener('click', async () => {
+  const popup = window.open('about:blank', '_blank');
+  if (!popup) { alert('Allow pop-ups to open PeakCut in a new window.'); return; }
+  popup.opener = null;
+  try {
+    const url = await startPeakcutWhenReady();
+    popup.location.replace(`${url}/app`);
+  } catch (error) {
+    popup.close();
+    alert(error.message);
+  }
+});
+
+$('#peakcut-stop').addEventListener('click', async () => {
+  try { await api('/api/peakcut/stop', {}); } catch (error) { alert(error.message); }
+  loadPeakcut();
+});
+
+setInterval(() => { if (activeTab === 'peakcut') loadPeakcut(); }, 5000);
 </script>
 </body>
 </html>

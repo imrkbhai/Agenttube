@@ -37,9 +37,20 @@ AGENT_PORT = int(os.getenv("AGENT_PORT", "3456"))
 AGENT_URL = f"http://127.0.0.1:{AGENT_PORT}"
 AGENT_LOG = CLIPS_DIR / "agent.log"
 INSPIRATION_URL = "https://raw.githubusercontent.com/yihui-dev/awesome-opus5-5-videos/main/data/videos.json"
+STUDIO_ROOT = ROOT / "studio"
+STUDIO_GUI = STUDIO_ROOT / "gui.py"
+STUDIO_LOG = ROOT / "logs" / "video-studio.log"
+STUDIO_PORT = int(os.getenv("AGENTTUBE_STUDIO_PORT", "7070"))
+STUDIO_URL = f"http://127.0.0.1:{STUDIO_PORT}"
+PEAKCUT_ROOT = ROOT / "peakcut"
+PEAKCUT_PORT = int(os.getenv("AGENTTUBE_PEAKCUT_PORT", "8767"))
+PEAKCUT_URL = f"http://127.0.0.1:{PEAKCUT_PORT}"
+PEAKCUT_LOG = ROOT / "logs" / "peakcut.log"
 
 _processes: dict[str, subprocess.Popen] = {}
 _agent: dict[str, subprocess.Popen] = {}
+_video_studio: dict[str, subprocess.Popen] = {}
+_peakcut: dict[str, subprocess.Popen] = {}
 _lock = threading.Lock()
 ACTIVE = ("queued", "running", "stopping")
 
@@ -338,6 +349,103 @@ def agent_stop() -> None:
     process.wait(timeout=15)
 
 
+# ── Original Video Studio ──────────────────────────────────────────────────
+
+def video_studio_status() -> dict:
+    process = _video_studio.get("process")
+    status = {"url": STUDIO_URL, "running": False,
+              "managed": process is not None and process.poll() is None,
+              "ready": STUDIO_GUI.is_file()}
+    try:
+        with urllib.request.urlopen(f"{STUDIO_URL}/api/status", timeout=2) as response:
+            status.update(running=True, pipeline=json.loads(response.read()))
+    except Exception:
+        pass
+    if STUDIO_LOG.exists():
+        status["log"] = STUDIO_LOG.read_text(encoding="utf-8", errors="replace")[-3000:]
+    return status
+
+
+def video_studio_start() -> dict:
+    if video_studio_status()["running"]:
+        return video_studio_status()
+    if not STUDIO_GUI.is_file():
+        raise BadRequest("The migrated Video Studio files are missing")
+    python = ROOT / ".venv-studio" / "Scripts" / "python.exe"
+    if not python.is_file():
+        python = ROOT / ".venv-studio" / "bin" / "python"
+    if not python.is_file():
+        raise BadRequest("Install Video Studio dependencies first; see the Video Studio section in README.md")
+    STUDIO_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log = open(STUDIO_LOG, "ab")
+    env = {**os.environ, "AGENTTUBE_STUDIO_EMBEDDED": "1",
+           "AGENTTUBE_STUDIO_PORT": str(STUDIO_PORT), "PYTHONIOENCODING": "utf-8"}
+    _video_studio["process"] = subprocess.Popen(
+        [str(python), "gui.py"], cwd=STUDIO_ROOT, stdout=log, stderr=subprocess.STDOUT, env=env)
+    log.close()
+    return {"starting": True, "url": STUDIO_URL}
+
+
+def video_studio_stop() -> None:
+    process = _video_studio.pop("process", None)
+    if process is None or process.poll() is not None:
+        raise BadRequest("The Video Studio was not started from this dashboard")
+    process.terminate()
+    process.wait(timeout=15)
+
+
+# ── PeakCut ────────────────────────────────────────────────────────────────
+
+def peakcut_status() -> dict:
+    process = _peakcut.get("process")
+    status = {"url": PEAKCUT_URL, "running": False,
+              "managed": process is not None and process.poll() is None,
+              "ready": (PEAKCUT_ROOT / "studio" / "server.py").is_file()}
+    try:
+        with urllib.request.urlopen(f"{PEAKCUT_URL}/healthz", timeout=2) as response:
+            status.update(running=True, health=json.loads(response.read()))
+    except Exception:
+        pass
+    if PEAKCUT_LOG.exists():
+        status["log"] = PEAKCUT_LOG.read_text(encoding="utf-8", errors="replace")[-3000:]
+    return status
+
+
+def peakcut_start() -> dict:
+    if peakcut_status()["running"]:
+        return peakcut_status()
+    if not (PEAKCUT_ROOT / "studio" / "server.py").is_file():
+        raise BadRequest("PeakCut source files are missing")
+    python = ROOT / ".venv-peakcut" / "Scripts" / "python.exe"
+    if not python.is_file():
+        python = ROOT / ".venv-peakcut" / "bin" / "python"
+    if not python.is_file():
+        raise BadRequest("Install PeakCut dependencies first; see the PeakCut section in README.md")
+    PEAKCUT_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log = open(PEAKCUT_LOG, "ab")
+    env = {**os.environ, "PEAKCUT_HOST": "127.0.0.1", "PEAKCUT_PORT": str(PEAKCUT_PORT),
+           "PEAKCUT_PUBLIC_URL": PEAKCUT_URL, "PEAKCUT_DATA": str(ROOT / "peakcut-data"),
+           "PEAKCUT_STORAGE_FILE": str(ROOT / "peakcut-data" / "storage.json"),
+           "PEAKCUT_REPO_URL": os.getenv("AGENTTUBE_PEAKCUT_GITHUB_URL", "https://github.com/imrkbhai/Agenttube"),
+           "PEAKCUT_X_URL": os.getenv("AGENTTUBE_PEAKCUT_X_URL", "https://x.com/imd_rky"),
+           "PEAKCUT_FOLLOW_URL": os.getenv("AGENTTUBE_PEAKCUT_INSTAGRAM_URL", "https://www.instagram.com/imd_rky/"),
+           "AGENTTUBE_PEAKCUT_EMBEDDED": "1",
+           "AGENTTUBE_DASHBOARD_ORIGINS": f"http://127.0.0.1:{PORT} http://localhost:{PORT}",
+           "PYTHONIOENCODING": "utf-8"}
+    _peakcut["process"] = subprocess.Popen(
+        [str(python), "-m", "studio.server"], cwd=PEAKCUT_ROOT, stdout=log, stderr=subprocess.STDOUT, env=env)
+    log.close()
+    return {"starting": True, "url": PEAKCUT_URL}
+
+
+def peakcut_stop() -> None:
+    process = _peakcut.pop("process", None)
+    if process is None or process.poll() is not None:
+        raise BadRequest("PeakCut was not started from this dashboard")
+    process.terminate()
+    process.wait(timeout=15)
+
+
 # ── HTTP ────────────────────────────────────────────────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
@@ -389,9 +497,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, page, "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; "
                                                               "script-src 'self' 'unsafe-inline'; media-src 'self'; "
-                                                              f"frame-src http://127.0.0.1:{AGENT_PORT}"})
+                                                              f"frame-src http://127.0.0.1:{AGENT_PORT} http://127.0.0.1:{STUDIO_PORT} "
+                                                              f"http://127.0.0.1:{PEAKCUT_PORT}"})
             if path == "/api/agent":
                 return self._json(agent_status())
+            if path == "/api/studio":
+                return self._json(video_studio_status())
+            if path == "/api/peakcut":
+                return self._json(peakcut_status())
             if path == "/api/inspiration":
                 params = parse_qs(urlparse(self.path).query)
                 try:
@@ -431,6 +544,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(agent_start())
             if path == "/api/agent/stop":
                 agent_stop()
+                return self._json({"ok": True})
+            if path == "/api/studio/start":
+                return self._json(video_studio_start())
+            if path == "/api/studio/stop":
+                video_studio_stop()
+                return self._json({"ok": True})
+            if path == "/api/peakcut/start":
+                return self._json(peakcut_start())
+            if path == "/api/peakcut/stop":
+                peakcut_stop()
                 return self._json({"ok": True})
             if path == "/api/jobs":
                 return self._json(start_job(body))
@@ -500,6 +623,9 @@ def main() -> None:
     finally:
         server.server_close()
         process = _agent.get("process")
+        if process is not None and process.poll() is None:
+            process.terminate()
+        process = _video_studio.get("process")
         if process is not None and process.poll() is None:
             process.terminate()
 

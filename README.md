@@ -118,6 +118,26 @@ npm run clip:dashboard   # then open http://127.0.0.1:8765
 
 **Automation Agent tab.** Starts, stops and embeds this repository's original YouTube Automation Agent dashboard (port 3456) so both tools are in one window. It needs `npm install` and stays in setup mode until you finish its Setup.
 
+**Video Studio tab.** Runs the migrated original-video workflow inside Agenttube: topic research, script writing, narration, stock visuals, rendering, metadata editing, review, and optional YouTube upload. Install its isolated dependencies once, then launch it from the dashboard:
+
+```powershell
+python -m venv .venv-studio
+.venv-studio\Scripts\python.exe -m pip install -r studio\requirements.txt
+npm run clip:dashboard
+```
+
+Open the **Video Studio** tab and press **Start**. Studio settings and OAuth files stay in the ignored `studio/.env` and `studio/client_secret*.json` files; generation does not upload unless you explicitly choose Upload in the studio. Its separate virtual environment keeps MoviePy 1.x and NumPy below 2 isolated from Clip Studio.
+
+**PeakCut tab.** Runs the upstream [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) dashboard in its own local server and Python environment. The included source is MIT licensed; its license is in `peakcut/LICENSE`. Install FFmpeg first if it is not already available, then install PeakCut's dependencies once:
+
+```powershell
+python -m venv .venv-peakcut
+.venv-peakcut\Scripts\python.exe -m pip install -r peakcut\requirements.txt
+npm run clip:dashboard
+```
+
+Open the **PeakCut** tab to start and show its dashboard automatically. **Open /app separately** opens the same page in another window. PeakCut uses port 8767 and keeps videos, settings, database, and its optional speech model in the ignored `peakcut-data/` folder. Its first startup downloads the speech model (about 480 MB). Add an AI key in PeakCut's **Settings, AI** page to enable AI-selected moments and titles; otherwise it can still choose moments based on speech and loudness. Its header links to the Agenttube GitHub repository and the X and Instagram profiles configured by `AGENTTUBE_PEAKCUT_GITHUB_URL`, `AGENTTUBE_PEAKCUT_X_URL`, and `AGENTTUBE_PEAKCUT_INSTAGRAM_URL` in `.env`.
+
 The same jobs run from the command line:
 
 ```bash
