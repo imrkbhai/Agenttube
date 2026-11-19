@@ -349,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
                         break
                     self.wfile.write(chunk)
                     remaining -= len(chunk)
-            except (ConnectionResetError, BrokenPipeError):
+            except ConnectionError:  # the browser stopped loading the video
                 pass
 
 
