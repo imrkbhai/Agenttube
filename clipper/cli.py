@@ -51,7 +51,8 @@ def run_video(args, job_dir: Path) -> None:
         raise RuntimeError("No speech found in the video, so there is nothing to clip.")
 
     _step(job_dir, "Picking moments")
-    plan = select_moments(source["path"], transcript, args.shorts, args.long, args.niche)
+    plan = select_moments(source["path"], transcript, args.shorts, args.long, args.niche,
+                          source_title=source["title"], creator=source["creator"])
     print(f"   {len(plan['shorts'])} Shorts and {len(plan['long'])} long clips (picked by {plan['selector']})")
 
     _step(job_dir, "Rendering")

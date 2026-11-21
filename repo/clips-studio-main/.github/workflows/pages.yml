@@ -1,0 +1,50 @@
+# Publish site/ to GitHub Pages.
+#
+# Pages must be switched to "GitHub Actions" as its source once, under
+# Settings → Pages. Until that is done this workflow succeeds and nothing
+# appears, which is a confusing way to spend an afternoon.
+
+name: Publish website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+      # Tell the IndexNow engines the site changed, so Bing crawls it in hours
+      # rather than weeks. continue-on-error because a refused submission is
+      # not a failed deploy, and the site is already live by this point.
+      - name: Tell search engines
+        continue-on-error: true
+        run: python scripts/ping_indexnow.py

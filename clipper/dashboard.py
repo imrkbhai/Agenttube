@@ -13,6 +13,7 @@ import subprocess
 import sys
 import threading
 import urllib.request
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,12 +27,15 @@ from clipper.create import LOOKS
 from clipper.download import ROOT, _node_path
 from clipper.jobs import JOB_ID, new_job_id, now, read_json, update_job, write_json
 from clipper.live import STOP_FILE, live_status
+from clipper import editing, post_scheduler, publishing
 
 HOST = "127.0.0.1"
 PORT = int(os.getenv("CLIPPER_DASHBOARD_PORT", "8765"))
 WEB_DIR = Path(__file__).resolve().parent / "web"
 CREATORS_FILE = CLIPS_DIR / "creators.json"
-CLIP_FILE = re.compile(r"^(short|long)_\d{2,3}\.mp4$")
+CLIP_FILE = re.compile(r"^(short|long)_\d{2,3}(?:_edit_\d{2})?\.mp4$")
+SOURCE_ENTRY = "__source__"
+SOURCE_MEDIA_FILE = re.compile(r"^(?:source\.[a-z0-9]{2,5}|recording\.ts)$", re.IGNORECASE)
 UPLOAD_EXTENSIONS = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
 MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024
 REVIEW_STATES = {"pending_review", "approved", "rejected"}
@@ -49,16 +53,10 @@ PEAKCUT_ROOT = ROOT / "peakcut"
 PEAKCUT_PORT = int(os.getenv("AGENTTUBE_PEAKCUT_PORT", "8767"))
 PEAKCUT_URL = f"http://127.0.0.1:{PEAKCUT_PORT}"
 PEAKCUT_LOG = ROOT / "logs" / "peakcut.log"
-MPT_ROOT = ROOT / "moneyprinterturbo"
-MPT_PORT = int(os.getenv("AGENTTUBE_MPT_PORT", "8768"))
-MPT_URL = f"http://127.0.0.1:{MPT_PORT}"
-MPT_LOG = ROOT / "logs" / "moneyprinterturbo.log"
-
 _processes: dict[str, subprocess.Popen] = {}
 _agent: dict[str, subprocess.Popen] = {}
 _video_studio: dict[str, subprocess.Popen] = {}
 _peakcut: dict[str, subprocess.Popen] = {}
-_moneyprinterturbo: dict[str, subprocess.Popen] = {}
 _lock = threading.Lock()
 ACTIVE = ("queued", "running", "stopping")
 
@@ -151,6 +149,9 @@ def _job_summary(job_dir: Path) -> tuple:
     review = read_json(job_dir / "review.json", {}) or {}
     clips = [{**c, "status": review.get(c["file"], c.get("status", "pending_review"))}
              for c in manifest.get("clips", [])]
+    editor_clips = read_json(job_dir / "editor_clips.json", []) or []
+    clips.extend({**c, "status": review.get(c["file"], c.get("status", "pending_review"))}
+                 for c in editor_clips)
     process = _processes.get(job.get("id"))
     starting = process is not None and process.poll() is None and job.get("state") == "queued"
     if job.get("state") in ACTIVE and not starting and not _pid_alive(job.get("pid")):
@@ -158,6 +159,7 @@ def _job_summary(job_dir: Path) -> tuple:
     job["counts"] = {s: sum(1 for c in clips if c["status"] == s) for s in REVIEW_STATES}
     job["counts"]["total"] = len(clips)
     job["title"] = job.get("title") or (manifest.get("source") or {}).get("title")
+    job["source_file"] = _source_file(job_dir, job)
     return job, manifest, clips
 
 
@@ -169,13 +171,117 @@ def list_jobs() -> list:
     return sorted(jobs, key=lambda j: j.get("id", ""), reverse=True)
 
 
+def delete_job(job_id: str) -> None:
+    with _lock:
+        job_dir = _job_dir(job_id)
+        job, _, _ = _job_summary(job_dir)
+        if job.get("state") not in {"failed", "interrupted", "stopped"}:
+            raise BadRequest("Only failed, interrupted, or stopped jobs can be deleted")
+        process = _processes.get(job_id)
+        worker_alive = process.poll() is None if process is not None else _pid_alive(job.get("pid"))
+        if worker_alive:
+            raise BadRequest("Wait for the job worker to stop before deleting it")
+        try:
+            shutil.rmtree(job_dir)
+        except OSError as error:
+            raise BadRequest(f"Could not delete job files: {error}") from error
+        _processes.pop(job_id, None)
+
+
 def job_detail(job_id: str) -> dict:
     job_dir = _job_dir(job_id)
     job, manifest, clips = _job_summary(job_dir)
+    published = read_json(job_dir / "publications.json", {}) or {}
+    clips = [{**clip, "publications": published.get(clip["file"], [])} for clip in clips]
+    source_file = job.get("source_file")
+    source_duration = _source_duration(job_dir, job, manifest) if source_file else None
     log = job_dir / "log.txt"
     tail = log.read_text(encoding="utf-8", errors="replace")[-4000:] if log.exists() else ""
     return {"job": job, "source": manifest.get("source"), "permission": manifest.get("permission"),
+            "source_file": source_file, "source_duration": source_duration,
             "clips": clips, "blueprint": load_blueprint(job_dir), "log": tail}
+
+
+def _source_candidates(job_dir: Path, job: dict) -> list[Path]:
+    return ([job_dir / "recording.ts"] if job.get("kind") == "live"
+            else sorted(job_dir.glob("source.*")))
+
+
+def _source_file(job_dir: Path, job: dict) -> str | None:
+    if not job.get("source_ready") and not (job_dir / "manifest.json").is_file():
+        return None
+    return next((path.name for path in _source_candidates(job_dir, job) if path.is_file()), None)
+
+
+def _source_duration(job_dir: Path, job: dict, manifest: dict) -> float | None:
+    source = manifest.get("source") or {}
+    duration = source.get("duration") or job.get("source_duration")
+    try:
+        value = float(duration)
+        if value > 0:
+            return value
+    except (TypeError, ValueError):
+        pass
+    filename = _source_file(job_dir, job)
+    if not filename:
+        return None
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json",
+             str(job_dir / filename)],
+            capture_output=True, text=True, check=True, timeout=15,
+        )
+        value = float(json.loads(result.stdout)["format"]["duration"])
+        return value if value > 0 else None
+    except (OSError, subprocess.SubprocessError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+def source_frame(job_id: str, filename: str, offset_text: str) -> bytes:
+    job_dir = _job_dir(job_id)
+    job = read_json(job_dir / "job.json", {}) or {}
+    manifest = read_json(job_dir / "manifest.json", {}) or {}
+    try:
+        offset = float(offset_text)
+    except (TypeError, ValueError):
+        raise BadRequest("Choose a valid preview time")
+    if not (offset >= 0 and offset < float("inf")):
+        raise BadRequest("Choose a valid preview time")
+    if filename == SOURCE_ENTRY:
+        clip = None
+        source_time = offset
+        duration = _source_duration(job_dir, job, manifest)
+        if duration is not None and offset > duration:
+            raise BadRequest("Preview time must be inside the source video")
+    else:
+        if not editing.SOURCE_FILE.fullmatch(filename):
+            raise BadRequest("Choose an original clip for layout preview")
+        clip = next((item for item in manifest.get("clips", []) if item.get("file") == filename), None)
+        if clip is None:
+            raise BadRequest("unknown clip")
+        try:
+            clip_duration = float(clip.get("duration", float(clip.get("end", 0)) - float(clip.get("start", 0))))
+        except (TypeError, ValueError):
+            raise BadRequest("Choose a valid preview time")
+        if offset > clip_duration:
+            raise BadRequest("Preview time must be inside the selected clip")
+        source_time = float(clip.get("start", 0)) + offset
+
+    source_name = _source_file(job_dir, job)
+    source = (job_dir / source_name).resolve() if source_name else None
+    if source is None or source.parent != job_dir.resolve():
+        raise BadRequest("The original source video is unavailable")
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-v", "error", "-ss", f"{source_time:.3f}", "-i", str(source),
+             "-frames:v", "1", "-vf", "scale=960:-2:force_original_aspect_ratio=decrease",
+             "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"],
+            capture_output=True, check=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise BadRequest("FFmpeg could not extract a source preview frame") from error
+    if not result.stdout:
+        raise BadRequest("No source frame was available at that time")
+    return result.stdout
 
 
 def start_job(body: dict) -> dict:
@@ -261,7 +367,8 @@ def start_upload(handler) -> dict:
         shorts = _int(body, "shorts", 5, 0, 20)
         long = _int(body, "long", 1, 0, 5)
         job = {"id": job_id, "created_at": now(), "kind": "video", "source_url": f"Uploaded: {filename}",
-               "title": Path(filename).stem, "creator": creator, "state": "queued", "stage": "Starting"}
+               "title": Path(filename).stem, "creator": creator, "source_ready": True,
+               "state": "queued", "stage": "Starting"}
         write_json(job_dir / "job.json", job)
         command = [sys.executable, "-m", "clipper", str(destination), f"--job-id={job_id}", f"--out={CLIPS_DIR}",
                    f"--shorts={shorts}", f"--long={long}", f"--permission={permission}"]
@@ -379,6 +486,242 @@ def review_clip(job_id: str, body: dict) -> None:
         review = read_json(job_dir / "review.json", {})
         review[file] = status
         write_json(job_dir / "review.json", review)
+
+
+def publish_clip(job_id: str, body: dict) -> dict:
+    job_dir = _job_dir(job_id)
+    job, _, clips = _job_summary(job_dir)
+    if job.get("state") != "finished":
+        raise BadRequest("Wait for clipping to finish before publishing")
+    filename = _text(body, "file", 40, required=True)
+    if not CLIP_FILE.fullmatch(filename):
+        raise BadRequest("unknown clip")
+    clip = next((item for item in clips if item.get("file") == filename), None)
+    if clip is None:
+        raise BadRequest("unknown clip")
+    if clip.get("status") != "approved":
+        raise BadRequest("Approve this clip before publishing")
+
+    platforms = body.get("platforms")
+    allowed = {"youtube", "instagram", "facebook", "x"}
+    if not isinstance(platforms, list):
+        raise BadRequest("Select at least one platform")
+    platforms = list(dict.fromkeys(platform for platform in platforms if platform in allowed))
+    if not platforms:
+        raise BadRequest("Select at least one supported platform")
+    title = _text(body, "title", 100, required=True)
+    caption = _text(body, "caption", 5000)
+    privacy = _text(body, "privacy", 20) or "private"
+    if privacy not in {"private", "unlisted", "public"}:
+        raise BadRequest("YouTube privacy must be private, unlisted, or public")
+
+    configured = publishing.publishing_status()
+    video = (job_dir / filename).resolve()
+    if job_dir.resolve() not in video.parents or not video.is_file():
+        raise BadRequest("The selected clip file is missing")
+
+    results = []
+    for platform in platforms:
+        if not configured[platform]["configured"]:
+            results.append({"platform": platform, "ok": False,
+                            "error": configured[platform]["message"]})
+            continue
+        if platform == "facebook" and clip.get("duration", 0) > 90:
+            results.append({"platform": platform, "ok": False,
+                            "error": "Facebook Reels must be 90 seconds or shorter"})
+            continue
+        try:
+            published = publishing.publish_video(platform, video, title, caption, privacy)
+            results.append({"platform": platform, "ok": True, **published})
+        except Exception as error:
+            results.append({"platform": platform, "ok": False, "error": str(error)[:500]})
+
+    successful = [result for result in results if result["ok"]]
+    if successful:
+        with _lock:
+            history = read_json(job_dir / "publications.json", {}) or {}
+            entries = history.setdefault(filename, [])
+            entries.extend({"platform": result["platform"], "url": result["url"],
+                            "title": title, "created_at": now()} for result in successful)
+            write_json(job_dir / "publications.json", history)
+    return {"results": results}
+
+
+def schedule_clip(job_id: str, body: dict) -> dict:
+    job_dir = _job_dir(job_id)
+    job, _, clips = _job_summary(job_dir)
+    if job.get("state") != "finished":
+        raise BadRequest("Wait for clipping to finish before scheduling")
+    filename = _text(body, "file", 40, required=True)
+    if not CLIP_FILE.fullmatch(filename):
+        raise BadRequest("unknown clip")
+    clip = next((item for item in clips if item.get("file") == filename), None)
+    if clip is None:
+        raise BadRequest("unknown clip")
+    if clip.get("status") != "approved":
+        raise BadRequest("Approve this clip before scheduling")
+    platforms = body.get("platforms")
+    allowed = {"youtube", "instagram", "facebook", "x"}
+    if not isinstance(platforms, list) or not platforms:
+        raise BadRequest("Select at least one platform")
+    if any(not isinstance(platform, str) or platform not in allowed for platform in platforms):
+        raise BadRequest("Select supported publishing platforms")
+    platforms = list(dict.fromkeys(platforms))
+    configured = publishing.publishing_status()
+    unavailable = [platform for platform in platforms if not configured[platform]["configured"]]
+    if unavailable:
+        raise BadRequest("Configure these platforms in Agenttube first: " + ", ".join(unavailable))
+    if "facebook" in platforms and clip.get("duration", 0) > 90:
+        raise BadRequest("Facebook Reels must be 90 seconds or shorter")
+    title = _text(body, "title", 100, required=True)
+    caption = _text(body, "caption", 5000)
+    privacy = _text(body, "privacy", 20) or "public"
+    if privacy not in {"private", "unlisted", "public"}:
+        raise BadRequest("YouTube privacy must be private, unlisted, or public")
+    scheduled_text = _text(body, "scheduled_at", 50, required=True)
+    try:
+        scheduled_at = datetime.fromisoformat(scheduled_text.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise BadRequest("Choose a valid publication date and time") from error
+    if scheduled_at.tzinfo is None or scheduled_at <= datetime.now(timezone.utc):
+        raise BadRequest("Choose a future publication time with a timezone")
+    video = (job_dir / filename).resolve()
+    if job_dir.resolve() not in video.parents or not video.is_file():
+        raise BadRequest("The selected clip file is missing")
+    return post_scheduler.schedule_post(
+        job_id, job.get("title") or filename, filename, platforms, title, caption, privacy, scheduled_at,
+    )
+
+
+def trypost_post(job_id: str, body: dict) -> dict:
+    job_dir = _job_dir(job_id)
+    job, _, clips = _job_summary(job_dir)
+    if job.get("state") != "finished":
+        raise BadRequest("Wait for clipping to finish before sending to TryPost")
+    filename = _text(body, "file", 40, required=True)
+    if not CLIP_FILE.fullmatch(filename):
+        raise BadRequest("unknown clip")
+    clip = next((item for item in clips if item.get("file") == filename), None)
+    if clip is None:
+        raise BadRequest("unknown clip")
+    if clip.get("status") != "approved":
+        raise BadRequest("Approve this clip before sending it to TryPost")
+    media_format = clip.get("format")
+    if media_format not in {"short", "long"}:
+        raise BadRequest("Unsupported video format")
+
+    account_ids = body.get("social_account_ids")
+    if not isinstance(account_ids, list) or not account_ids:
+        raise BadRequest("Select at least one TryPost account")
+    content_types = body.get("content_types")
+    if content_types is not None and not isinstance(content_types, dict):
+        raise BadRequest("Invalid TryPost content formats")
+    title = _text(body, "title", 100, required=True)
+    caption = _text(body, "caption", 5000)
+    status = _text(body, "status", 20) or "draft"
+    if status not in {"draft", "scheduled", "publishing"}:
+        raise BadRequest("Choose draft, scheduled, or publish now")
+    scheduled_at = _text(body, "scheduled_at", 50)
+    scheduled_times = body.get("scheduled_times")
+    if status == "scheduled":
+        if isinstance(scheduled_times, dict):
+            schedule_by_account = {str(account_id): scheduled_times.get(str(account_id)) for account_id in account_ids}
+        elif scheduled_at:
+            schedule_by_account = {str(account_id): scheduled_at for account_id in account_ids}
+        else:
+            raise BadRequest("Choose a publication time for every selected account")
+        for value in schedule_by_account.values():
+            if not isinstance(value, str):
+                raise BadRequest("Choose a publication time for every selected account")
+            try:
+                scheduled = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as error:
+                raise BadRequest("Choose a valid publication date and time") from error
+            if scheduled.tzinfo is None or scheduled <= datetime.now(timezone.utc):
+                raise BadRequest("Choose a future publication time with a timezone")
+        scheduled_times = schedule_by_account
+    privacy = _text(body, "privacy", 20) or "public"
+    video = (job_dir / filename).resolve()
+    if job_dir.resolve() not in video.parents or not video.is_file():
+        raise BadRequest("The selected clip file is missing")
+
+    try:
+        created = publishing.handoff_to_trypost(
+            video, title, caption, account_ids, status=status,
+            scheduled_at=scheduled_at or None, privacy=privacy, media_format=media_format,
+            scheduled_times=scheduled_times, content_types=content_types,
+        )
+    except Exception as error:
+        raise BadRequest(str(error)[:500]) from error
+    with _lock:
+        history = read_json(job_dir / "publications.json", {}) or {}
+        entries = history.setdefault(filename, [])
+        entries.extend({"platform": destination["platform"], "service": "TryPost",
+                "url": created["url"], "id": destination["id"],
+                        "title": f"{destination['platform'].title()} {status}: {title}",
+                        "status": status, "created_at": now()}
+                   for destination in created["destinations"])
+        write_json(job_dir / "publications.json", history)
+    return {"ok": True, **created}
+
+
+def youtube_post(job_id: str, body: dict) -> dict:
+    job_dir = _job_dir(job_id)
+    job, _, clips = _job_summary(job_dir)
+    if job.get("state") != "finished":
+        raise BadRequest("Wait for clipping to finish before sending to YouTube")
+    filename = _text(body, "file", 40, required=True)
+    if not CLIP_FILE.fullmatch(filename):
+        raise BadRequest("unknown clip")
+    clip = next((item for item in clips if item.get("file") == filename), None)
+    if clip is None:
+        raise BadRequest("unknown clip")
+    if clip.get("status") != "approved":
+        raise BadRequest("Approve this video before sending it to YouTube")
+    if clip.get("format") != "long":
+        raise BadRequest("Use TryPost for YouTube Shorts")
+    configured = publishing.publishing_status()["youtube"]
+    if not configured["configured"]:
+        raise BadRequest(configured["message"])
+
+    title = _text(body, "title", 100, required=True)
+    caption = _text(body, "caption", 5000)
+    status = _text(body, "status", 20) or "draft"
+    if status not in {"draft", "scheduled", "publishing"}:
+        raise BadRequest("Choose draft, scheduled, or publish now")
+    scheduled_at = _text(body, "scheduled_at", 50)
+    if status == "scheduled":
+        try:
+            scheduled = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise BadRequest("Choose a valid publication date and time") from error
+        if scheduled.tzinfo is None or scheduled <= datetime.now(timezone.utc):
+            raise BadRequest("Choose a future publication time with a timezone")
+    privacy = _text(body, "privacy", 20) or "private"
+    if privacy not in {"private", "unlisted", "public"}:
+        raise BadRequest("YouTube privacy must be private, unlisted, or public")
+    video = (job_dir / filename).resolve()
+    if job_dir.resolve() not in video.parents or not video.is_file():
+        raise BadRequest("The selected video file is missing")
+
+    upload_privacy = "private" if status in {"draft", "scheduled"} else privacy
+    publish_at = scheduled_at if status == "scheduled" else None
+    try:
+        uploaded = publishing.publish_video(
+            "youtube", video, title, caption, upload_privacy, scheduled_at=publish_at,
+        )
+    except Exception as error:
+        raise BadRequest(str(error)[:500]) from error
+    result_status = "uploaded privately (draft)" if status == "draft" else "scheduled" if status == "scheduled" else (
+        "published" if privacy == "public" else f"uploaded {privacy}"
+    )
+    with _lock:
+        history = read_json(job_dir / "publications.json", {}) or {}
+        entries = history.setdefault(filename, [])
+        entries.append({"platform": "youtube", "url": uploaded["url"], "id": uploaded.get("id"),
+                       "title": f"{result_status}: {title}", "status": result_status, "created_at": now()})
+        write_json(job_dir / "publications.json", history)
+    return {"ok": True, **uploaded, "status": result_status}
 
 
 # ── Automation Agent (the original Agenttube Node server) ─────────────────────────
@@ -520,68 +863,6 @@ def peakcut_stop() -> None:
 
 # ── MoneyPrinterTurbo ──────────────────────────────────────────────────────
 
-def moneyprinterturbo_status() -> dict:
-    process = _moneyprinterturbo.get("process")
-    python = MPT_ROOT / ".venv" / "Scripts" / "python.exe"
-    if not python.is_file():
-        python = MPT_ROOT / ".venv" / "bin" / "python"
-    streamlit = MPT_ROOT / ".venv" / "Scripts" / "streamlit.exe"
-    if not streamlit.is_file():
-        streamlit = MPT_ROOT / ".venv" / "bin" / "streamlit"
-    source_ready = (MPT_ROOT / "webui" / "Main.py").is_file()
-    status = {"url": MPT_URL, "running": False,
-              "managed": process is not None and process.poll() is None,
-              "ready": source_ready and python.is_file() and streamlit.is_file(),
-              "source": source_ready}
-    try:
-        with urllib.request.urlopen(f"{MPT_URL}/_stcore/health", timeout=2) as response:
-            status.update(running=response.status == 200)
-    except Exception:
-        pass
-    if MPT_LOG.exists():
-        status["log"] = MPT_LOG.read_text(encoding="utf-8", errors="replace")[-3000:]
-    return status
-
-
-def moneyprinterturbo_start() -> dict:
-    if moneyprinterturbo_status()["running"]:
-        return moneyprinterturbo_status()
-    if not (MPT_ROOT / "webui" / "Main.py").is_file():
-        raise BadRequest("MoneyPrinterTurbo source is missing; see its setup instructions in README.md")
-    python = MPT_ROOT / ".venv" / "Scripts" / "python.exe"
-    if not python.is_file():
-        python = MPT_ROOT / ".venv" / "bin" / "python"
-    if not python.is_file():
-        raise BadRequest("Install MoneyPrinterTurbo dependencies first; see its setup instructions in README.md")
-    streamlit = MPT_ROOT / ".venv" / "Scripts" / "streamlit.exe"
-    if not streamlit.is_file():
-        streamlit = MPT_ROOT / ".venv" / "bin" / "streamlit"
-    if not streamlit.is_file():
-        raise BadRequest("Install MoneyPrinterTurbo dependencies first; see its setup instructions in README.md")
-    MPT_LOG.parent.mkdir(parents=True, exist_ok=True)
-    data_dir = ROOT / "moneyprinterturbo-data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    log = open(MPT_LOG, "ab")
-    env = {**os.environ, "MPT_HOME": str(data_dir), "PYTHONIOENCODING": "utf-8"}
-    _moneyprinterturbo["process"] = subprocess.Popen(
-        [str(python), "-m", "streamlit", "run", "webui/Main.py",
-         "--server.address=127.0.0.1", f"--server.port={MPT_PORT}",
-         "--server.headless=true", "--browser.gatherUsageStats=false",
-         "--client.toolbarMode=minimal", "--logger.hideWelcomeMessage=true",
-         "--server.showEmailPrompt=false"],
-        cwd=MPT_ROOT, stdout=log, stderr=subprocess.STDOUT, env=env)
-    log.close()
-    return {"starting": True, "url": MPT_URL}
-
-
-def moneyprinterturbo_stop() -> None:
-    process = _moneyprinterturbo.pop("process", None)
-    if process is None or process.poll() is not None:
-        raise BadRequest("MoneyPrinterTurbo was not started from this dashboard")
-    process.terminate()
-    process.wait(timeout=15)
-
-
 # ── HTTP ────────────────────────────────────────────────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
@@ -631,18 +912,17 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 page = (WEB_DIR / "index.html").read_bytes()
                 return self._send(200, page, "text/html; charset=utf-8",
-                                  {"Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+                                  {"Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                                                              "font-src 'self' https://fonts.gstatic.com; "
                                                               "script-src 'self' 'unsafe-inline'; media-src 'self'; "
                                                               f"frame-src http://127.0.0.1:{AGENT_PORT} http://127.0.0.1:{STUDIO_PORT} "
-                                                              f"http://127.0.0.1:{PEAKCUT_PORT} http://127.0.0.1:{MPT_PORT}"})
+                                                              f"http://127.0.0.1:{PEAKCUT_PORT}"})
             if path == "/api/agent":
                 return self._json(agent_status())
             if path == "/api/studio":
                 return self._json(video_studio_status())
             if path == "/api/peakcut":
                 return self._json(peakcut_status())
-            if path == "/api/moneyprinterturbo":
-                return self._json(moneyprinterturbo_status())
             if path == "/api/inspiration":
                 params = parse_qs(urlparse(self.path).query)
                 try:
@@ -651,8 +931,19 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": f"Could not load the prompt library: {error}"}, 502)
             if path == "/api/creators":
                 return self._json(load_creators())
+            if path == "/api/publishing/status":
+                return self._json(publishing.publishing_status())
+            if path == "/api/scheduled-posts":
+                return self._json(post_scheduler.list_posts())
             if path == "/api/jobs":
                 return self._json(list_jobs())
+            match = re.fullmatch(r"/api/jobs/([\w-]+)/frame", path)
+            if match:
+                params = parse_qs(urlparse(self.path).query)
+                filename = params.get("file", [""])[0]
+                offset = params.get("time", ["0"])[0]
+                return self._send(200, source_frame(match.group(1), filename, offset), "image/jpeg",
+                                  {"Cache-Control": "no-store"})
             match = re.fullmatch(r"/api/jobs/([\w-]+)", path)
             if match:
                 return self._json(job_detail(match.group(1)))
@@ -695,13 +986,30 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/peakcut/stop":
                 peakcut_stop()
                 return self._json({"ok": True})
-            if path == "/api/moneyprinterturbo/start":
-                return self._json(moneyprinterturbo_start())
-            if path == "/api/moneyprinterturbo/stop":
-                moneyprinterturbo_stop()
-                return self._json({"ok": True})
             if path == "/api/jobs":
                 return self._json(start_job(body))
+            match = re.fullmatch(r"/api/jobs/([\w-]+)/schedule", path)
+            if match:
+                return self._json(schedule_clip(match.group(1), body))
+            match = re.fullmatch(r"/api/scheduled-posts/([0-9a-f]{16})/cancel", path)
+            if match:
+                try:
+                    return self._json(post_scheduler.cancel_post(match.group(1)))
+                except ValueError as error:
+                    raise BadRequest(str(error)) from error
+            match = re.fullmatch(r"/api/jobs/([\w-]+)/edit", path)
+            if match:
+                try:
+                    return self._json(editing.create_edit(_job_dir(match.group(1)), body))
+                except editing.EditingError as error:
+                    raise BadRequest(str(error)) from error
+            match = re.fullmatch(r"/api/jobs/([\w-]+)/delete", path)
+            if match:
+                delete_job(match.group(1))
+                return self._json({"ok": True})
+            match = re.fullmatch(r"/api/jobs/([\w-]+)/publish", path)
+            if match:
+                return self._json(publish_clip(match.group(1), body))
             match = re.fullmatch(r"/api/jobs/([\w-]+)/(stop|review)", path)
             if match and match.group(2) == "stop":
                 stop_job(match.group(1))
@@ -759,6 +1067,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     load_dotenv(ROOT / ".env")
     CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+    post_scheduler.start_worker()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Clip Studio dashboard: http://{HOST}:{PORT}  (Ctrl+C to stop)")
     try:
@@ -773,9 +1082,7 @@ def main() -> None:
         process = _video_studio.get("process")
         if process is not None and process.poll() is None:
             process.terminate()
-        process = _moneyprinterturbo.get("process")
-        if process is not None and process.poll() is None:
-            process.terminate()
+        post_scheduler.stop_worker()
 
 
 if __name__ == "__main__":

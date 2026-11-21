@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agenttube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e7e9ee; --muted:#8b93a7; --accent:#ffd400; --ok:#2ecc71; --bad:#ff5c5c; --live:#ff3b3b; }
   * { box-sizing: border-box; }
@@ -19,6 +22,7 @@
   .row { display:flex; gap:8px; } .row > * { flex:1; }
   button { background:#232835; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 12px; font:inherit; cursor:pointer; }
   button:hover { border-color:#3a4152; }
+  button:disabled { opacity:.55; cursor:not-allowed; }
   button.primary { background:var(--accent); color:#111; border-color:var(--accent); font-weight:600; }
   button.danger { color:var(--bad); }
   button.small { padding:4px 8px; font-size:12px; }
@@ -39,13 +43,47 @@
   tr.job { cursor:pointer; } tr.job:hover { background:#1c2029; } tr.job.selected { background:#202634; }
   .muted { color:var(--muted); }
   .clips { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
+  .clip-list-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:4px 0 10px; }
   .clip { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#12151b; }
   .clip video { width:100%; display:block; background:#000; max-height:420px; }
   .clip .body { padding:10px; }
   .clip .title { font-weight:600; margin-bottom:4px; }
   .clip .desc { color:var(--muted); font-size:12px; white-space:pre-wrap; max-height:90px; overflow:auto; }
+  #tab-studio .upload-title, #tab-studio .alt-title { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  #tab-studio .upload-title { margin-bottom:8px; }
+  #tab-studio .upload-title > div, #tab-studio .alt-title > span { min-width:0; }
+  #tab-studio .title-label { font-size:11px; margin-bottom:2px; }
+  #tab-studio .alt-titles { display:grid; gap:5px; margin-bottom:8px; }
+  #tab-studio .alt-title { color:#6d6159; font-size:12px; }
+  #tab-studio .alt-title button, #tab-studio .upload-title button { flex:none; }
+  #tab-studio .published-links { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; font-size:12px; }
+  #tab-studio .published-links a { color:#0f8a57; }
   .clip .actions { display:flex; gap:6px; margin-top:8px; }
+  #publish-dialog { width:min(560px,calc(100vw - 24px)); max-height:calc(100vh - 24px); overflow:auto; padding:0; border:1px solid #e1d9d3; border-radius:8px; color:#211813; background:#fff; }
+  #publish-dialog::backdrop { background:rgba(20,16,13,.62); }
+  #publish-form { display:grid; gap:12px; padding:20px; }
+  #publish-form h2 { margin:0; font-size:18px; }
+  #publish-form label { margin:0; color:#211813; }
+  #publish-form textarea { resize:vertical; }
+  #publish-form fieldset { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; padding:10px; border:1px solid #eee8e4; border-radius:6px; }
+  #publish-form [hidden] { display:none; }
+  #publish-form legend { padding:0 4px; font-size:12px; color:#6d6159; }
+  #publish-form .platform-option { display:flex; gap:8px; align-items:flex-start; padding:8px; border:1px solid #eee8e4; border-radius:6px; }
+  #publish-form .platform-option input { width:auto; margin:3px 0 0; }
+  #publish-form .platform-copy { display:grid; gap:2px; min-width:0; }
+  #publish-form .platform-message, #publish-status { color:#6d6159; font-size:11px; }
+  #publish-form .social-account-list { display:grid; gap:8px; margin-top:12px; }
+  #tab-social-publisher .social-account-list { display:grid; gap:8px; margin-top:12px; }
+  #tab-social-publisher .social-account { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #eee8e4; }
+  #tab-social-publisher .social-account-info { display:grid; gap:3px; min-width:0; }
+  #tab-social-publisher .social-account-detail { color:#6d6159; font-size:12px; overflow-wrap:anywhere; }
+  #publish-form .publish-results { display:grid; gap:6px; }
+  #publish-form .publish-result { font-size:12px; }
+  #publish-form .publish-result.success { color:#0f8a57; }
+  #publish-form .publish-result.failure { color:#d3343f; }
+  #publish-form .publish-footer { display:flex; justify-content:flex-end; gap:8px; }
   pre.log { background:#0c0e12; border:1px solid var(--line); border-radius:6px; padding:10px; max-height:220px; overflow:auto; font-size:12px; white-space:pre-wrap; }
+  #tab-agent pre.log { color:#f1f5f9; background:#111827; border-color:#374151; }
   .notice { font-size:12px; color:var(--muted); border-left:3px solid var(--accent); padding-left:8px; margin-top:10px; }
   .error { color:var(--bad); font-size:12px; min-height:16px; margin-top:6px; }
   .hidden { display:none; }
@@ -59,7 +97,23 @@
   .variant li { margin-bottom:6px; }
   iframe.agent { width:100%; height:calc(100vh - 230px); min-height:500px; border:1px solid var(--line); border-radius:8px; background:#fff; }
   iframe.video-studio { width:100%; height:calc(100vh - 300px); min-height:600px; border:1px solid var(--line); border-radius:8px; background:#09090f; }
-  iframe.moneyprinterturbo { width:100%; height:calc(100vh - 300px); min-height:650px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  #scheduled-posts { display:grid; gap:8px; }
+  #scheduled-posts .social-account { padding:10px 0; border-bottom:1px solid #eee8e4; }
+  #tab-video-generator #create-form textarea { min-height:160px; }
+  .clip-editor-layout { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr); gap:18px; }
+  .clip-editor-media { position:relative; width:100%; }
+  .clip-editor-media video { display:block; width:100%; max-height:72vh; background:#09090f; border-radius:8px; }
+  .clip-editor-media img { display:block; width:100%; max-height:72vh; object-fit:contain; background:#09090f; border-radius:8px; }
+  .clip-editor-media video.hidden, .clip-editor-media img.hidden, #clip-editor-regions.hidden { display:none; }
+  #clip-editor-regions { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  .clip-editor-region-buttons { display:flex; flex-wrap:wrap; gap:6px; }
+  .clip-editor-region-buttons button.active { border-color:#ffd400; color:#ffd400; }
+  .clip-editor-region-buttons button[hidden] { display:none; }
+  #clip-editor-layout-controls { border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
+  .clip-editor-controls { display:grid; align-content:start; gap:4px; }
+  .clip-editor-controls .row { align-items:end; }
+  .clip-editor-controls button.primary { margin-top:12px; }
+  @media (max-width:760px) { .clip-editor-layout { grid-template-columns:1fr; } }
   #tab-studio {
     --bg:#fff; --panel:#fff; --line:#eee8e4; --text:#211813; --muted:#6d6159;
     --accent:#ff8b33; --ok:#0f8a57; --bad:#d3343f; --live:#e5323f;
@@ -99,7 +153,7 @@
   #tab-studio .studio-columns { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); gap:16px; }
   #tab-studio .studio-columns > div { min-width:0; }
   #tab-studio .job-table-wrap { overflow-x:auto; }
-  #tab-studio .job-table-wrap table { min-width:620px; }
+  #tab-studio .job-table-wrap table { min-width:720px; }
   #tab-studio .job-stage { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #tab-studio tr.job:focus-visible { outline:2px solid #ff8b33; outline-offset:-2px; }
   #tab-studio h2 { color:#2a1a12; }
@@ -153,6 +207,95 @@
   }
   @media (max-width: 640px) { #tab-clone { grid-template-columns: 1fr; } }
   main.single { grid-template-columns: 1fr; }
+  :root {
+    --bg:#eef2fa; --panel:#fff; --line:#dfe5f1; --text:#17213a; --muted:#68738d;
+    --accent:#2674e8; --ok:#16845c; --bad:#d94856; --live:#e44854;
+  }
+  body {
+    font-family:"DM Sans", "Segoe UI", sans-serif;
+    color:var(--text);
+    background-color:#f3f5fb;
+    background-image:linear-gradient(rgba(57,86,145,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(57,86,145,.035) 1px, transparent 1px);
+    background-size:44px 44px;
+  }
+  header {
+    position:sticky; top:0; z-index:20; padding:12px 28px;
+    background:rgba(248,250,255,.94); border-bottom:1px solid #dfe5f1;
+    backdrop-filter:blur(14px);
+  }
+  header h1 { font-family:"Space Grotesk", "DM Sans", sans-serif; font-size:21px; font-weight:700; color:#1e4d91; }
+  main { width:100%; max-width:1480px; margin:0 auto; padding:22px 28px; }
+  section { background:#fff; border-color:#dfe5f1; border-radius:8px; box-shadow:0 8px 26px rgba(35,59,105,.045); }
+  h2 { font-family:"Space Grotesk", "DM Sans", sans-serif; color:#17213a; font-size:17px; }
+  button { background:#fff; color:#25324f; border-color:#d6deed; border-radius:7px; transition:background .16s ease, border-color .16s ease, transform .16s ease; }
+  button:hover { border-color:#87b2ed; background:#f4f8ff; }
+  button.primary { background:#2674e8; color:#fff; border-color:#2674e8; }
+  button.primary:hover { background:#195fc8; border-color:#195fc8; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:3px solid rgba(38,116,232,.28); outline-offset:2px; }
+  input, select, textarea { background:#fbfcff; color:#17213a; border-color:#d6deed; border-radius:7px; }
+  .badge { background:#eef2fa; color:#68738d; }
+  .badge.live { background:#ffebed; color:#bd3544; }
+  .badge.running, .badge.queued, .badge.stopping { background:#fff4dc; color:#97620a; }
+  .badge.finished, .badge.approved { background:#e7f6ef; color:#16845c; }
+  .badge.failed, .badge.stopped, .badge.rejected { background:#ffebed; color:#bd3544; }
+  nav.tabs button { border-radius:7px; color:#5f6a84; }
+  nav.tabs button.active { background:#e7f2ff; border-color:#c9defa; color:#175cba; }
+  tr.job:hover { background:#f5f8fe; }
+  tr.job.selected { background:#edf5ff; }
+  .creator, .clip, .variant { border-color:#e1e7f1; background:#fff; }
+  .clip { box-shadow:0 5px 18px rgba(35,59,105,.05); }
+  #tab-studio {
+    --bg:#f3f5fb; --panel:#fff; --line:#dfe5f1; --text:#17213a; --muted:#68738d;
+    --accent:#2674e8; --ok:#16845c; --bad:#d94856; --live:#e44854;
+    color:#17213a; background:transparent;
+  }
+  #tab-studio section { border-color:#dfe5f1; box-shadow:0 8px 26px rgba(35,59,105,.045); }
+  #tab-studio .studio-composer { border-top:3px solid #55c5d5; }
+  #tab-studio .studio-hero h2 { color:#17213a; font-size:28px; }
+  #tab-studio .studio-hero p { color:#68738d; }
+  #tab-studio .studio-subnav { border-color:#dfe5f1; }
+  #tab-studio .studio-subnav button { color:#68738d; }
+  #tab-studio .studio-subnav button.active { border-bottom-color:#2674e8; background:#edf5ff; color:#175cba; }
+  #tab-studio .studio-source { border-color:#cfd9e9; }
+  #tab-studio .studio-url input:focus { box-shadow:inset 0 0 0 2px #2674e8; }
+  #tab-studio .studio-controls > button.primary { border-color:#2674e8; background:#2674e8; color:#fff; }
+  #tab-studio .studio-controls > button.primary:hover { border-color:#195fc8; background:#195fc8; }
+  #tab-studio .studio-controls > button, #tab-studio .studio-options > summary { background:#f0f5fc; color:#52617d; }
+  #tab-studio .studio-controls > button:hover, #tab-studio .studio-options > summary:hover { background:#e6f2ff; color:#175cba; }
+  #tab-studio .studio-drop, #tab-studio .studio-upload-status { color:#75819a; }
+  #tab-studio h2 { color:#17213a; }
+  #tab-studio input, #tab-studio select, #tab-studio textarea { color:#17213a; border-color:#d6deed; }
+  #tab-studio input:focus, #tab-studio select:focus, #tab-studio textarea:focus { border-color:#2674e8; outline-color:#c8dcfb; }
+  #tab-studio button { border-color:#d6deed; color:#25324f; }
+  #tab-studio button:hover { border-color:#87b2ed; background:#f4f8ff; }
+  #tab-studio button.primary { border-color:#2674e8; background:#2674e8; color:#fff; }
+  #tab-studio button.primary:hover { border-color:#195fc8; background:#195fc8; }
+  #tab-studio .creator, #tab-studio .clip { border-color:#e1e7f1; background:#fff; }
+  #tab-studio .badge { background:#eef2fa; color:#68738d; }
+  #tab-studio .badge.running, #tab-studio .badge.queued, #tab-studio .badge.stopping { background:#fff4dc; color:#97620a; }
+  #tab-studio .badge.finished, #tab-studio .badge.approved { background:#e7f6ef; color:#16845c; }
+  #tab-studio .badge.failed, #tab-studio .badge.stopped, #tab-studio .badge.rejected { background:#ffebed; color:#bd3544; }
+  #tab-studio .notice { border-color:#47bdcf; color:#596782; }
+  #tab-studio tr.job:hover { background:#f5f8fe; }
+  #tab-studio tr.job.selected { background:#edf5ff; }
+  .social-links a { border-color:#d7e1ef; background:#fff; color:#1b355e; }
+  .social-links a:hover { border-color:#91b8ec; background:#f1f7ff; }
+  .social-links a.instagram { border-color:#bceaf0; background:#e9f9fb; color:#087c91; }
+  .social-links a.instagram:hover { border-color:#7ed4df; background:#dff5f8; }
+  .notice { border-color:#47bdcf; color:#5f6b85; }
+  .muted, th { color:#68738d; }
+  .clip .desc { color:#68738d; }
+  #publish-dialog { border-color:#dfe5f1; box-shadow:0 24px 70px rgba(24,44,84,.2); }
+  #publish-form button.primary { background:#2674e8; border-color:#2674e8; color:#fff; }
+  #publish-form button.primary:hover { background:#195fc8; border-color:#195fc8; }
+  @media (max-width:640px) {
+    header { padding:10px 14px; }
+    main { padding:14px; }
+    #tab-studio .studio-hero h2 { font-size:23px; }
+    header .social-links { justify-self:start; }
+    nav.tabs { padding-bottom:2px; }
+  }
 </style>
 </head>
 <body>
@@ -160,10 +303,12 @@
   <h1>Agenttube</h1>
   <nav class="tabs">
     <button data-tab="studio" class="active">Clip Studio</button>
-    <button data-tab="clone">Viral Clone &amp; Create</button>
+    <button data-tab="clone">Viral Clone</button>
+    <button data-tab="video-generator">Video Generator</button>
     <button data-tab="agent">Automation Agent</button>
     <button data-tab="video">Video Studio</button>
-    <button data-tab="moneyprinterturbo">MoneyPrinterTurbo</button>
+    <button data-tab="social-publisher">Social Publishing</button>
+    <button data-tab="clip-editor">Clip Editor</button>
   </nav>
   <div class="social-links" aria-label="Agenttube social links">
     <a href="https://github.com/imrkbhai/Agenttube" target="_blank" rel="noopener" title="Open Agenttube on GitHub">
@@ -247,7 +392,7 @@
       <h2>All Videos</h2>
       <div class="job-table-wrap">
         <table>
-          <thead><tr><th>Started</th><th>Type</th><th>Source</th><th>Status</th><th>Clips</th></tr></thead>
+          <thead><tr><th>Started</th><th>Type</th><th>Source</th><th>Status</th><th>Clips</th><th>Actions</th></tr></thead>
           <tbody id="jobs"></tbody>
         </table>
       </div>
@@ -260,12 +405,46 @@
         <button class="danger" id="stop-btn">Stop</button>
       </div>
       <p class="muted" id="detail-meta"></p>
+      <div class="clip-list-toolbar">
+        <span class="muted" id="clip-list-status" aria-live="polite"></span>
+        <button id="toggle-rejected-clips" class="small" type="button" hidden>Show rejected (0)</button>
+      </div>
       <div class="clips" id="clips"></div>
       <details style="margin-top:14px"><summary>Log</summary><pre class="log" id="log"></pre></details>
     </section>
   </div>
 
 </main>
+
+<dialog id="publish-dialog" aria-labelledby="publish-heading">
+  <form id="publish-form">
+    <h2 id="publish-heading">Publish approved clip</h2>
+    <p id="publish-clip-name" class="muted" style="margin:0"></p>
+    <fieldset>
+      <legend>Choose platforms</legend>
+      <label class="platform-option"><input id="publish-youtube" type="checkbox" name="platform" value="youtube"><span class="platform-copy"><strong>YouTube</strong><span id="publish-youtube-status" class="platform-message"></span></span></label>
+      <label class="platform-option"><input id="publish-instagram" type="checkbox" name="platform" value="instagram"><span class="platform-copy"><strong>Instagram Reels</strong><span id="publish-instagram-status" class="platform-message"></span></span></label>
+      <label class="platform-option"><input id="publish-facebook" type="checkbox" name="platform" value="facebook"><span class="platform-copy"><strong>Facebook Page Reels</strong><span id="publish-facebook-status" class="platform-message"></span></span></label>
+      <label class="platform-option"><input id="publish-x" type="checkbox" name="platform" value="x"><span class="platform-copy"><strong>X video post</strong><span id="publish-x-status" class="platform-message"></span></span></label>
+    </fieldset>
+    <label for="publish-title">Title</label>
+    <input id="publish-title" maxlength="100" required>
+    <label for="publish-caption">Caption or description</label>
+    <textarea id="publish-caption" maxlength="5000" rows="4" placeholder="Optional. This text is sent only to the platforms you select."></textarea>
+    <label for="publish-privacy">YouTube privacy</label>
+    <select id="publish-privacy"><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select>
+    <label for="publish-schedule-time">Schedule time (Asia/Kolkata)</label>
+    <input id="publish-schedule-time" type="datetime-local">
+    <div id="publish-status" role="status" aria-live="polite">Check each selected platform and review the title before publishing.</div>
+    <div id="publish-error" class="error" role="alert"></div>
+    <div id="publish-results" class="publish-results" aria-live="polite"></div>
+    <div class="publish-footer">
+      <button id="publish-close" type="button">Cancel</button>
+      <button id="publish-schedule-submit" type="button" disabled>Schedule selected</button>
+      <button id="publish-submit" class="primary" type="submit" disabled>Publish</button>
+    </div>
+  </form>
+</dialog>
 
 <main id="tab-clone" class="hidden">
   <div>
@@ -303,41 +482,6 @@
     </section>
   </div>
   <div>
-    <section>
-      <h2>Create a video (free)</h2>
-      <form id="create-form">
-        <label>Start from</label>
-        <select name="source">
-          <option value="script">My script — narrated exactly as written</option>
-          <option value="idea">An idea — Gemini writes the script (free tier key needed)</option>
-        </select>
-        <label>Script or idea</label>
-        <textarea name="text" rows="7" required placeholder="Paste a script, or describe the video you want. Any topic."></textarea>
-        <div class="row">
-          <div><label>Format</label><select name="format"><option value="short">Short 9:16</option><option value="long">Video 16:9</option></select></div>
-          <div><label>Look</label><select name="look">
-            <option value="documentary">Documentary (B&amp;W, yellow)</option>
-            <option value="studio">Studio (clean, colour)</option>
-            <option value="blueprint">Blueprint (science, how-it-works)</option>
-            <option value="night">Night (tech, trailers)</option>
-          </select></div>
-        </div>
-        <div class="row">
-          <div><label>Voice</label><select name="voice">
-            <option value="en-US-AndrewNeural">Andrew (Edge, falls back to offline)</option>
-            <option value="en-US-AriaNeural">Aria (Edge, falls back to offline)</option>
-            <option value="en-GB-RyanNeural">Ryan, British (Edge)</option>
-            <option value="hi-IN-MadhurNeural">Madhur, Hindi (Edge)</option>
-            <option value="David">David (offline Windows)</option>
-            <option value="Zira">Zira (offline Windows)</option>
-          </select></div>
-          <div><label>Niche (optional)</label><input name="niche" maxlength="100" placeholder="history, food, tech…"></div>
-        </div>
-        <div class="row" style="margin-top:12px"><button class="primary" type="submit">Create video</button></div>
-        <div class="error" id="create-error"></div>
-      </form>
-      <p class="notice">Free: free-licence Wikimedia Commons images (licences recorded in credits), offline or Edge voice, local word timing, FFmpeg. Method adapted from <a href="https://github.com/Moh4696/cinematic-skill" target="_blank" rel="noopener" style="color:var(--accent)">cinematic-skill</a> (MIT).</p>
-    </section>
     <section id="clone-detail" class="hidden">
       <h2 id="clone-title"></h2>
       <p class="muted" id="clone-meta"></p>
@@ -347,15 +491,60 @@
   </div>
 </main>
 
+<main id="tab-video-generator" class="single hidden">
+  <section>
+    <h2>AI Video Generator</h2>
+    <form id="create-form">
+      <label>Start from</label>
+      <select name="source">
+        <option value="script">My script — narrated exactly as written</option>
+        <option value="idea">An idea — Gemini writes the script (free tier key needed)</option>
+      </select>
+      <label>Script or idea</label>
+      <textarea name="text" rows="7" required placeholder="Paste a script, or describe the video you want. Any topic."></textarea>
+      <div class="row">
+        <div><label>Format</label><select name="format"><option value="short">Short 9:16</option><option value="long">Video 16:9</option></select></div>
+        <div><label>Look</label><select name="look">
+          <option value="documentary">Documentary (B&amp;W, yellow)</option>
+          <option value="studio">Studio (clean, colour)</option>
+          <option value="blueprint">Blueprint (science, how-it-works)</option>
+          <option value="night">Night (tech, trailers)</option>
+        </select></div>
+      </div>
+      <div class="row">
+        <div><label>Voice</label><select name="voice">
+          <option value="en-US-AndrewNeural">Andrew (Edge, falls back to offline)</option>
+          <option value="en-US-AriaNeural">Aria (Edge, falls back to offline)</option>
+          <option value="en-GB-RyanNeural">Ryan, British (Edge)</option>
+          <option value="hi-IN-MadhurNeural">Madhur, Hindi (Edge)</option>
+          <option value="David">David (offline Windows)</option>
+          <option value="Zira">Zira (offline Windows)</option>
+        </select></div>
+        <div><label>Niche (optional)</label><input name="niche" maxlength="100" placeholder="history, food, tech…"></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="primary" type="submit">Create video</button></div>
+      <div class="error" id="create-error"></div>
+    </form>
+    <p class="notice">Agenttube renders with its local voice timing and FFmpeg pipeline using licensed Wikimedia Commons imagery. Completed videos appear in Clip Studio for review.</p>
+  </section>
+</main>
+
 <main id="tab-agent" class="single hidden">
   <section>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
       <h2 style="margin:0">YouTube Automation Agent</h2>
       <span id="agent-badge"></span>
       <span style="margin-left:auto"></span>
-      <a id="agent-open" target="_blank" rel="noopener"><button>Open in new window</button></a>
+      <button id="agent-start" type="button" disabled>Start service</button>
+      <button id="agent-stop" type="button" hidden>Stop service</button>
+      <button id="agent-open" type="button" disabled>Open dashboard</button>
     </div>
-    <p class="muted" id="agent-meta">The original Agenttube dashboard (from darkzOGx/youtube-automation-agent): channel strategy, AI video generation, review, scheduling, analytics. Generation and publishing stay disabled until you finish its Setup.</p>
+    <p class="muted" id="agent-meta" role="status" aria-live="polite">Checking the Automation Agent service…</p>
+    <details id="agent-setup-help">
+      <summary>What setup is required?</summary>
+      <p class="muted">In a terminal opened in the Agenttube project folder, run <code>npm run credentials:setup</code>. The wizard configures YouTube sign-in and an AI provider, then asks about channel, narration, and content settings. Keep API keys in the terminal; do not enter them in this dashboard. When setup finishes, start or restart the service here.</p>
+    </details>
+    <p class="notice">This is a separate YouTube channel agent. It does not automatically schedule videos uploaded in Clip Studio. Approve a clip in <strong>Clip Studio → All Videos</strong> to publish or schedule it through Social Publishing. The Automation Agent schedules content created in its own workflow after setup.</p>
     <iframe class="agent hidden" id="agent-frame" title="Automation Agent"></iframe>
     <details style="margin-top:10px"><summary>Agent log</summary><pre class="log" id="agent-log"></pre></details>
   </section>
@@ -375,18 +564,104 @@
   </section>
 </main>
 
-<main id="tab-moneyprinterturbo" class="single hidden">
+<main id="tab-social-publisher" class="single hidden">
   <section>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-      <h2 style="margin:0">MoneyPrinterTurbo</h2>
-      <span id="mpt-badge"></span>
+      <h2 style="margin:0">Social Publishing</h2>
       <span style="margin-left:auto"></span>
-      <button id="mpt-open" type="button">Open separately</button>
+      <button id="social-publisher-refresh" type="button">Refresh</button>
     </div>
-    <p class="muted" id="mpt-meta">Generate videos from a topic or script with configurable footage, narration, subtitles and music. Provider charges and publishing are controlled in MoneyPrinterTurbo.</p>
-    <div id="mpt-setup" class="notice hidden">Install the upstream source and its isolated environment first. See the MoneyPrinterTurbo section in README.md. Keep its credentials and generated files in the dedicated moneyprinterturbo-data folder.</div>
-    <iframe class="moneyprinterturbo hidden" id="mpt-frame" title="MoneyPrinterTurbo"></iframe>
-    <details style="margin-top:10px"><summary>MoneyPrinterTurbo log</summary><pre class="log" id="mpt-log"></pre></details>
+    <p class="muted" id="social-publisher-message" role="status" aria-live="polite">Checking direct publishing setup…</p>
+    <div id="social-platform-status" class="social-account-list"></div>
+  </section>
+  <section>
+    <h2>Scheduled posts</h2>
+    <div id="scheduled-posts"></div>
+  </section>
+</main>
+
+<main id="tab-clip-editor" class="single hidden">
+  <section>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+      <h2 style="margin:0">Clip Editor</h2>
+      <span style="margin-left:auto"></span>
+      <button id="clip-editor-refresh" type="button">Refresh clips</button>
+    </div>
+    <p class="muted">Edit a downloaded source or rendered clip. New renders are added for review; originals stay unchanged.</p>
+    <div class="clip-editor-layout">
+      <div class="clip-editor-preview">
+        <div class="clip-editor-media">
+          <video id="clip-editor-video" controls preload="metadata"></video>
+          <img id="clip-editor-source-frame" class="hidden" alt="Source frame for layout selection">
+          <canvas id="clip-editor-regions" class="hidden" aria-label="Draw the source regions for this layout"></canvas>
+        </div>
+        <label id="clip-editor-frame-label" class="hidden" for="clip-editor-frame">Layout preview time within clip</label>
+        <input id="clip-editor-frame" class="hidden" type="range" min="0" max="0" step="0.1" value="0">
+        <p id="clip-editor-status" class="muted" role="status" aria-live="polite">Choose a finished job to load its clips.</p>
+      </div>
+      <div class="clip-editor-controls">
+        <label for="clip-editor-job">Video job</label>
+        <select id="clip-editor-job"></select>
+        <label for="clip-editor-clip">Source or finished clip</label>
+        <select id="clip-editor-clip"></select>
+        <div class="row">
+          <div>
+            <label for="clip-editor-start">Trim start (seconds)</label>
+            <input id="clip-editor-start" type="number" min="0" step="0.1" value="0">
+          </div>
+          <div>
+            <label for="clip-editor-end">Trim end (seconds)</label>
+            <input id="clip-editor-end" type="number" min="0.5" step="0.1">
+          </div>
+        </div>
+        <label for="clip-editor-aspect">Output format</label>
+        <select id="clip-editor-aspect">
+          <option value="original">Keep original</option>
+          <option value="portrait">Portrait 9:16</option>
+          <option value="square">Square 1:1</option>
+          <option value="landscape">Landscape 16:9</option>
+        </select>
+        <label for="clip-editor-crop">Horizontal crop position</label>
+        <select id="clip-editor-crop">
+          <option value="center">Center</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+        <label for="clip-editor-layout-mode">Composition</label>
+        <select id="clip-editor-layout-mode">
+          <option value="standard">Standard crop</option>
+          <option value="gaming">Gaming / Reaction split</option>
+          <option value="podcast">Podcast two-shot</option>
+        </select>
+        <div id="clip-editor-layout-controls" class="hidden">
+          <p id="clip-editor-region-hint" class="muted">Draw the source regions on the frame.</p>
+          <div class="clip-editor-region-buttons">
+            <button type="button" data-editor-region="webcam">Webcam</button>
+            <button type="button" data-editor-region="game">Game</button>
+            <button type="button" data-editor-region="speaker_a">Speaker A</button>
+            <button type="button" data-editor-region="speaker_b">Speaker B</button>
+          </div>
+          <div id="clip-editor-camera-share-control">
+            <label for="clip-editor-camera-share">Webcam share: <span id="clip-editor-camera-share-value">38%</span></label>
+            <input id="clip-editor-camera-share" type="range" min="25" max="50" step="1" value="38">
+          </div>
+          <label for="clip-editor-layout-top">Top panel</label>
+          <select id="clip-editor-layout-top"></select>
+        </div>
+        <label for="clip-editor-volume">Audio level</label>
+        <input id="clip-editor-volume" type="range" min="0" max="2" step="0.1" value="1">
+        <label for="clip-editor-speed">Playback speed</label>
+        <select id="clip-editor-speed">
+          <option value="0.5">0.5×</option>
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <button id="clip-editor-render" class="primary" type="button" disabled>Render edited copy</button>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -394,6 +669,17 @@
 const $ = (sel) => document.querySelector(sel);
 let creators = [];
 let selectedJob = null;
+let showRejectedClips = false;
+let publishFile = null;
+let editorJobs = [];
+let editorClips = [];
+let editorJobId = '';
+let editorSourceFile = '';
+let editorSourceDuration = 0;
+let editorBoxes = {};
+let activeEditorRegion = '';
+let editorDrawing = null;
+let editorFrameTimer = null;
 const renderedClips = new Map();
 
 function showStudioView(view) {
@@ -618,16 +904,46 @@ function jobStep(job) {
 
 async function loadJobs() {
   const all = await api('/api/jobs');
-  const jobs = all.filter(job => !['clone', 'create'].includes(job.kind));
-  renderCloneJobs(all.filter(job => ['clone', 'create'].includes(job.kind)));
+  const jobs = all.filter(job => job.kind !== 'clone');
+  renderCloneJobs(all.filter(job => job.kind === 'clone'));
   $('#no-jobs').classList.toggle('hidden', jobs.length > 0);
-  $('#jobs').replaceChildren(...jobs.map(job => el('tr', {
+  $('#jobs').replaceChildren(...jobs.map(job => {
+    const canDelete = ['failed', 'interrupted', 'stopped'].includes(job.state);
+    const deleteButton = canDelete ? el('button', {
+      class: 'small danger', textContent: 'Delete', title: `Delete ${job.state} job and its files`,
+      onclick: async event => {
+        event.stopPropagation();
+        if (!confirm(`Permanently delete this ${job.state} job and its generated clips?`)) return;
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          await api(`/api/jobs/${job.id}/delete`, {});
+          if (selectedJob === job.id) {
+            selectedJob = null;
+            $('#detail').classList.add('hidden');
+            $('#clips').replaceChildren();
+            renderedClips.clear();
+          }
+          await loadJobs();
+        } catch (error) {
+          alert(`Could not delete job: ${error.message}`);
+          if (button.isConnected) button.disabled = false;
+        }
+      }
+    }) : '';
+    return el('tr', {
       class: `job${job.id === selectedJob ? ' selected' : ''}`,
       tabIndex: 0,
-      onclick: () => { selectedJob = job.id; loadJobs(); },
+      onclick: () => {
+        if (selectedJob !== job.id) showRejectedClips = false;
+        selectedJob = job.id;
+        loadJobs();
+      },
       onkeydown: event => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
+          if (selectedJob !== job.id) showRejectedClips = false;
           selectedJob = job.id;
           loadJobs();
         }
@@ -639,7 +955,9 @@ async function loadJobs() {
       el('div', { class: 'muted', textContent: job.creator || '' })),
     el('td', {}, badge(job.state || 'unknown'), el('div', { class: 'muted job-stage', textContent: jobStep(job), title: job.stage || '' })),
     el('td', { textContent: `${job.counts.total} (${job.counts.approved} ✓ ${job.counts.rejected} ✗)` }),
-  )));
+    el('td', {}, deleteButton),
+  );
+  }));
   if (selectedJob) loadDetail();
 }
 
@@ -657,35 +975,204 @@ async function loadDetail() {
   $('#log').textContent = data.log;
 
   const box = $('#clips');
-  if (box.dataset.job !== selectedJob) { box.replaceChildren(); renderedClips.clear(); box.dataset.job = selectedJob; }
+  if (box.dataset.job !== selectedJob) {
+    box.replaceChildren();
+    renderedClips.clear();
+    showRejectedClips = false;
+    box.dataset.job = selectedJob;
+  }
+  const rejectedCount = clips.filter(clip => clip.status === 'rejected').length;
+  if (!rejectedCount) showRejectedClips = false;
+  const rejectedToggle = $('#toggle-rejected-clips');
+  rejectedToggle.hidden = rejectedCount === 0;
+  rejectedToggle.textContent = `${showRejectedClips ? 'Hide' : 'Show'} rejected (${rejectedCount})`;
+  const visibleCount = showRejectedClips ? clips.length : clips.length - rejectedCount;
+  $('#clip-list-status').textContent = rejectedCount && !showRejectedClips
+    ? `${visibleCount} clips shown · ${rejectedCount} rejected hidden`
+    : `${visibleCount} clips shown`;
   for (const clip of clips) {
+    if (clip.status === 'rejected' && !showRejectedClips) {
+      renderedClips.get(clip.file)?.card.remove();
+      renderedClips.delete(clip.file);
+    }
+  }
+  for (const clip of clips) {
+    if (clip.status === 'rejected' && !showRejectedClips) continue;
     const key = clip.file;
     if (!renderedClips.has(key)) {
       const status = el('span');
+      const uploadTitle = clip.title || clip.file;
+      const titleVariants = (clip.title_variants || []).filter(title => typeof title === 'string' && title.trim());
+      const publishedLinks = el('div', { class: 'published-links' });
       const card = el('div', { class: 'clip' },
         el('video', { src: `/media/${selectedJob}/${clip.file}`, controls: true, preload: 'metadata' }),
         el('div', { class: 'body' },
-          el('div', { class: 'title', textContent: clip.title || clip.file }),
-          clip.title_variants?.length ? el('div', { class: 'muted', style: 'font-size:12px', textContent: 'Alt titles: ' + clip.title_variants.join(' | ') }) : null,
+          el('div', { class: 'upload-title' },
+            el('div', {},
+              el('div', { class: 'muted title-label', textContent: 'Suggested upload title · YouTube & Instagram' }),
+              el('div', { class: 'title', textContent: uploadTitle })),
+            copyTitleButton(uploadTitle, 'upload title')),
+          titleVariants.length ? el('div', { class: 'alt-titles' },
+            el('div', { class: 'muted title-label', textContent: 'Alternative titles' }),
+            ...titleVariants.map(title => el('div', { class: 'alt-title' },
+              el('span', { textContent: title }), copyTitleButton(title, 'alternative title')))) : null,
           el('div', { class: 'muted', textContent:
             `${clip.format === 'short' ? 'Short' : 'Long'} · ${Math.round(clip.duration)}s · ${clip.selector || ''}` +
             (clip.scores ? ` · hook ${clip.scores.hook} · value ${clip.scores.value}` : '') }),
           el('div', { class: 'desc', textContent: clip.description || '' }),
+            publishedLinks,
           el('div', { class: 'actions' }, status,
             el('button', { class: 'small', textContent: 'Approve', onclick: () => review(clip.file, 'approved') }),
             el('button', { class: 'small danger', textContent: 'Reject', onclick: () => review(clip.file, 'rejected') }),
-            el('button', { class: 'small', textContent: 'Undo', onclick: () => review(clip.file, 'pending_review') }))));
-      renderedClips.set(key, status);
+              el('button', { class: 'small', textContent: 'Undo', onclick: () => review(clip.file, 'pending_review') }),
+              el('button', { class: 'small primary', textContent: 'Publish…', disabled: clip.status !== 'approved',
+                title: clip.status === 'approved' ? 'Choose platforms and publish this approved clip' : 'Approve this clip before publishing',
+                onclick: () => openPublishDialog(clip) }))));
+        renderedClips.set(key, { card, status, publishedLinks });
       box.append(card);
     }
-    renderedClips.get(key).replaceChildren(badge(clip.status === 'pending_review' ? 'pending' : clip.status, clip.status));
+      const rendered = renderedClips.get(key);
+      rendered.status.replaceChildren(badge(clip.status === 'pending_review' ? 'pending' : clip.status, clip.status));
+      const platformNames = { youtube: 'YouTube', instagram: 'Instagram', facebook: 'Facebook', x: 'X' };
+      rendered.publishedLinks.replaceChildren(...(clip.publications || []).map(post =>
+        el('a', { href: post.url, target: '_blank', rel: 'noopener',
+          textContent: `${platformNames[post.platform] || post.platform} · ${post.title || 'Published'}` })));
   }
 }
 
+function copyTitleButton(value, label) {
+  return el('button', { class: 'small', textContent: 'Copy', title: `Copy ${label}`,
+    onclick: async event => {
+      const button = event.currentTarget;
+      try {
+        await navigator.clipboard.writeText(value);
+        button.textContent = 'Copied';
+      } catch {
+        button.textContent = 'Unavailable';
+      }
+      setTimeout(() => { if (button.isConnected) button.textContent = 'Copy'; }, 1400);
+    } });
+}
+
+async function openPublishDialog(clip) {
+  publishFile = clip.file;
+  $('#publish-clip-name').textContent = clip.title || clip.file;
+  $('#publish-title').value = clip.title || '';
+  $('#publish-caption').value = '';
+  $('#publish-privacy').value = 'private';
+  $('#publish-schedule-time').value = '';
+  $('#publish-error').textContent = '';
+  $('#publish-results').replaceChildren();
+  $('#publish-submit').disabled = true;
+  $('#publish-schedule-submit').disabled = true;
+  $('#publish-status').textContent = 'Checking platform setup…';
+  for (const platform of ['youtube', 'instagram', 'facebook', 'x']) {
+    $(`#publish-${platform}`).checked = false;
+    $(`#publish-${platform}`).disabled = true;
+    $(`#publish-${platform}-status`).textContent = 'Checking…';
+  }
+  $('#publish-dialog').showModal();
+  try {
+    const status = await api('/api/publishing/status');
+    let anyConfigured = false;
+    for (const platform of ['youtube', 'instagram', 'facebook', 'x']) {
+      const configured = status[platform]?.configured;
+      const tooLongForFacebook = platform === 'facebook' && clip.duration > 90;
+      if (configured && !tooLongForFacebook) anyConfigured = true;
+      $(`#publish-${platform}`).disabled = !configured || tooLongForFacebook;
+      $(`#publish-${platform}-status`).textContent = configured
+        ? tooLongForFacebook ? 'Facebook Reels must be 90 seconds or shorter' : 'Ready'
+        : status[platform]?.message || 'Not configured';
+    }
+    $('#publish-submit').disabled = !anyConfigured;
+    $('#publish-schedule-submit').disabled = !anyConfigured;
+    $('#publish-status').textContent = 'Select connected platforms to publish now or add them to Agenttube’s schedule.';
+  } catch (error) {
+    $('#publish-status').textContent = 'Could not load platform setup.';
+    $('#publish-error').textContent = error.message;
+  }
+}
+
+function asiaKolkataDateToUtc(value) {
+  if (!value) throw new Error('Choose a publication date and time.');
+  const parsed = new Date(`${value}:00+05:30`);
+  if (Number.isNaN(parsed.getTime())) throw new Error('Choose a valid publication date and time.');
+  return parsed.toISOString();
+}
+
+$('#publish-schedule-submit').addEventListener('click', async () => {
+  const platforms = [...document.querySelectorAll('#publish-form input[name="platform"]:checked')]
+    .map(input => input.value);
+  if (!platforms.length) {
+    $('#publish-error').textContent = 'Select at least one connected platform.';
+    return;
+  }
+  const button = $('#publish-schedule-submit');
+  button.disabled = true;
+  $('#publish-error').textContent = '';
+  $('#publish-status').textContent = 'Adding this post to Agenttube’s schedule…';
+  try {
+    const scheduled = await api(`/api/jobs/${selectedJob}/schedule`, {
+      file: publishFile, platforms, title: $('#publish-title').value.trim(),
+      caption: $('#publish-caption').value.trim(), privacy: $('#publish-privacy').value,
+      scheduled_at: asiaKolkataDateToUtc($('#publish-schedule-time').value),
+    });
+    $('#publish-status').textContent = `Scheduled for ${new Date(scheduled.scheduled_at).toLocaleString()}.`;
+    await loadScheduledPosts();
+  } catch (error) {
+    $('#publish-error').textContent = error.message;
+    $('#publish-status').textContent = 'Could not schedule this post.';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#publish-close').addEventListener('click', () => $('#publish-dialog').close());
+$('#publish-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const platforms = [...document.querySelectorAll('#publish-form input[name="platform"]:checked')]
+    .map(input => input.value);
+  if (!platforms.length) {
+    $('#publish-error').textContent = 'Select at least one connected platform.';
+    return;
+  }
+  const button = $('#publish-submit');
+  button.disabled = true;
+  $('#publish-error').textContent = '';
+  $('#publish-status').textContent = 'Uploading and publishing. This may take a few minutes.';
+  try {
+    const response = await api(`/api/jobs/${selectedJob}/publish`, {
+      file: publishFile, platforms, title: $('#publish-title').value.trim(),
+      caption: $('#publish-caption').value.trim(), privacy: $('#publish-privacy').value,
+    });
+    const platformNames = { youtube: 'YouTube', instagram: 'Instagram', facebook: 'Facebook', x: 'X' };
+    $('#publish-results').replaceChildren(...response.results.map(result =>
+      result.ok
+        ? el('div', { class: 'publish-result success' }, `${platformNames[result.platform]} published · `,
+          el('a', { href: result.url, target: '_blank', rel: 'noopener', textContent: 'View post' }))
+        : el('div', { class: 'publish-result failure',
+          textContent: `${platformNames[result.platform]}: ${result.error}` })));
+    $('#publish-status').textContent = 'Publishing finished. Check each platform result.';
+    await loadDetail();
+  } catch (error) {
+    $('#publish-error').textContent = error.message;
+    $('#publish-status').textContent = 'Publishing could not be completed.';
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function review(file, status) {
   await api(`/api/jobs/${selectedJob}/review`, { file, status });
-  loadDetail(); loadJobs();
+  await loadJobs();
 }
+
+$('#toggle-rejected-clips').addEventListener('click', () => {
+  showRejectedClips = !showRejectedClips;
+  $('#clips').replaceChildren();
+  renderedClips.clear();
+  loadDetail();
+});
 
 $('#stop-btn').addEventListener('click', async () => {
   if (!confirm('Stop this job? Live jobs finish the recording and still make the long clips.')) return;
@@ -702,11 +1189,433 @@ let activeTab = 'studio';
 document.querySelectorAll('nav.tabs button').forEach(button => button.addEventListener('click', () => {
   activeTab = button.dataset.tab;
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === button));
-  for (const tab of ['studio', 'clone', 'agent', 'video', 'moneyprinterturbo']) $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
+  for (const tab of ['studio', 'clone', 'video-generator', 'agent', 'video', 'social-publisher', 'clip-editor']) {
+    $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
+  }
   if (activeTab === 'agent') loadAgent();
   if (activeTab === 'video') loadVideoStudio();
-  if (activeTab === 'moneyprinterturbo') startMptWhenReady().catch(error => alert(error.message));
+  if (activeTab === 'social-publisher') loadSocialPublishing();
+  if (activeTab === 'clip-editor') loadClipEditor();
 }));
+
+$('#social-publisher-refresh').addEventListener('click', loadSocialPublishing);
+$('#publish-schedule-time').addEventListener('input', () => {
+  $('#publish-schedule-submit').disabled = !$('#publish-schedule-time').value;
+});
+$('#clip-editor-refresh').addEventListener('click', () => loadClipEditor(true));
+$('#clip-editor-job').addEventListener('change', event => loadEditorClips(event.currentTarget.value));
+$('#clip-editor-clip').addEventListener('change', event => showEditorClip(event.currentTarget.value));
+$('#clip-editor-layout-mode').addEventListener('change', () => updateEditorLayoutMode(true));
+$('#clip-editor-frame').addEventListener('input', seekEditorSourceFrame);
+$('#clip-editor-start').addEventListener('input', () => {
+  if ($('#clip-editor-layout-mode').value !== 'standard') {
+    $('#clip-editor-frame').value = $('#clip-editor-start').value;
+    seekEditorSourceFrame();
+  }
+});
+$('#clip-editor-camera-share').addEventListener('input', event => {
+  $('#clip-editor-camera-share-value').textContent = `${event.currentTarget.value}%`;
+});
+document.querySelectorAll('[data-editor-region]').forEach(button => button.addEventListener('click', () => {
+  activeEditorRegion = button.dataset.editorRegion;
+  updateEditorRegionControls();
+}));
+$('#clip-editor-video').addEventListener('loadedmetadata', event => {
+  const clip = editorClips.find(item => item.file === $('#clip-editor-clip').value);
+  if (!clip) return;
+  const duration = Number(clip.duration);
+  $('#clip-editor-start').max = Math.max(0, duration - 0.5).toFixed(2);
+  $('#clip-editor-end').max = duration.toFixed(2);
+  if ($('#clip-editor-layout-mode').value !== 'standard') {
+    $('#clip-editor-frame').max = duration.toFixed(2);
+    seekEditorSourceFrame();
+  }
+  resizeEditorRegionCanvas();
+});
+$('#clip-editor-source-frame').addEventListener('load', resizeEditorRegionCanvas);
+$('#clip-editor-source-frame').addEventListener('error', () => {
+  $('#clip-editor-status').textContent = 'Could not load a source frame. Check the job log and try another frame.';
+});
+$('#clip-editor-regions').addEventListener('pointerdown', startEditorRegion);
+$('#clip-editor-regions').addEventListener('pointermove', moveEditorRegion);
+$('#clip-editor-regions').addEventListener('pointerup', finishEditorRegion);
+$('#clip-editor-regions').addEventListener('pointercancel', () => {
+  editorDrawing = null;
+  drawEditorRegions();
+});
+window.addEventListener('resize', resizeEditorRegionCanvas);
+$('#clip-editor-render').addEventListener('click', renderEditorClip);
+
+async function loadClipEditor(refresh = false) {
+  const status = $('#clip-editor-status');
+  status.textContent = 'Loading downloaded sources and finished clips…';
+  try {
+    editorJobs = await api('/api/jobs');
+    editorJobs = editorJobs.filter(job => job.source_file || (job.state === 'finished' && job.counts?.total > 0));
+    const select = $('#clip-editor-job');
+    select.replaceChildren(...editorJobs.map(job => el('option', {
+      value: job.id,
+      textContent: `${job.title || job.source_url || job.id} · ${job.source_file ? 'source ready' : 'clips ready'} · ${when(job.created_at)}`
+    })));
+    if (!editorJobs.length) {
+      editorJobId = '';
+      $('#clip-editor-clip').replaceChildren();
+      $('#clip-editor-video').removeAttribute('src');
+      editorSourceFile = '';
+      editorSourceDuration = 0;
+      $('#clip-editor-render').disabled = true;
+      status.textContent = 'No downloaded sources or finished clips are available yet.';
+      return;
+    }
+    editorJobId = refresh ? editorJobs[0].id : editorJobs.some(job => job.id === editorJobId)
+      ? editorJobId : editorJobs[0].id;
+    select.value = editorJobId;
+    await loadEditorClips(editorJobId);
+  } catch (error) {
+    status.textContent = `Could not load clips: ${error.message}`;
+  }
+}
+
+async function loadEditorClips(jobId) {
+  editorJobId = jobId;
+  const select = $('#clip-editor-clip');
+  const status = $('#clip-editor-status');
+  if (!jobId) return;
+  status.textContent = 'Loading job clips…';
+  try {
+    const data = await api(`/api/jobs/${jobId}`);
+    editorSourceFile = data.source_file || '';
+    editorSourceDuration = Number(data.source_duration) || 0;
+    editorClips = [
+      ...(editorSourceFile ? [{
+        file: '__source__',
+        duration: editorSourceDuration,
+        title: `Downloaded source · ${data.source?.title || data.job.title || editorSourceFile}`,
+        status: 'source',
+        source: true,
+      }] : []),
+      ...data.clips.filter(clip => !clip.edit_of && /^(short|long)_\d{2,3}\.mp4$/.test(clip.file)),
+    ];
+    select.replaceChildren(...editorClips.map(clip => el('option', {
+      value: clip.file,
+      textContent: clip.source
+        ? `${clip.title} · ${clip.duration > 0 ? `${Math.round(clip.duration)}s` : 'duration unavailable'}`
+        : `${clip.file} · ${Math.round(clip.duration)}s · ${clip.status.replace('_', ' ')}`
+    })));
+    if (!editorClips.length) {
+      $('#clip-editor-video').removeAttribute('src');
+      $('#clip-editor-render').disabled = true;
+      status.textContent = 'This job has no original clips available to edit.';
+      return;
+    }
+    showEditorClip(editorClips[0].file);
+  } catch (error) {
+    status.textContent = `Could not load job clips: ${error.message}`;
+  }
+}
+
+function showEditorClip(filename) {
+  const clip = editorClips.find(item => item.file === filename);
+  if (!clip) return;
+  editorBoxes = {};
+  $('#clip-editor-start').value = '0';
+  const clipDuration = Number(clip.duration);
+  $('#clip-editor-end').value = Math.min(clipDuration, clip.source ? 60 : clipDuration).toFixed(2);
+  $('#clip-editor-end').max = clipDuration.toFixed(2);
+  $('#clip-editor-aspect').value = 'original';
+  $('#clip-editor-crop').value = 'center';
+  $('#clip-editor-volume').value = '1';
+  $('#clip-editor-speed').value = '1';
+  $('#clip-editor-layout-mode').value = 'standard';
+  $('#clip-editor-camera-share').value = '38';
+  $('#clip-editor-camera-share-value').textContent = '38%';
+  const videoUrl = clip.source
+    ? `/media/${editorJobId}/${editorSourceFile}`
+    : `/media/${editorJobId}/${clip.file}`;
+  const video = $('#clip-editor-video');
+  if (clip.source) video.removeAttribute('src');
+  else if (video.getAttribute('src') !== videoUrl) video.src = videoUrl;
+  updateEditorLayoutMode(false);
+  $('#clip-editor-status').textContent = `${clip.title || clip.file} · original preserved`;
+}
+
+function editorRegionNames(mode = $('#clip-editor-layout-mode').value) {
+  if (mode === 'gaming') return ['webcam', 'game'];
+  if (mode === 'podcast') return ['speaker_a', 'speaker_b'];
+  return [];
+}
+
+function updateEditorLayoutMode(clearBoxes) {
+  const mode = $('#clip-editor-layout-mode').value;
+  const video = $('#clip-editor-video');
+  const image = $('#clip-editor-source-frame');
+  const canvas = $('#clip-editor-regions');
+  const composition = mode !== 'standard';
+  const clip = editorClips.find(item => item.file === $('#clip-editor-clip').value);
+  const sourcePreview = Boolean(clip?.source);
+  const framePreview = composition || sourcePreview;
+  if (composition && !editorSourceFile) {
+    $('#clip-editor-layout-mode').value = 'standard';
+    $('#clip-editor-status').textContent = 'This job has no retained source video; standard editing is available.';
+    return updateEditorLayoutMode(false);
+  }
+  if (clearBoxes) editorBoxes = {};
+  video.controls = !framePreview;
+  video.classList.toggle('hidden', framePreview);
+  image.classList.toggle('hidden', !framePreview);
+  canvas.classList.toggle('hidden', !composition);
+  $('#clip-editor-layout-controls').classList.toggle('hidden', !composition);
+  $('#clip-editor-frame-label').classList.toggle('hidden', !framePreview);
+  $('#clip-editor-frame-label').textContent = sourcePreview
+    ? 'Preview time in source video' : 'Layout preview time within clip';
+  $('#clip-editor-frame').classList.toggle('hidden', !framePreview);
+  $('#clip-editor-aspect').disabled = composition;
+  $('#clip-editor-crop').disabled = composition;
+  $('#clip-editor-camera-share-control').classList.toggle('hidden', mode !== 'gaming');
+  const names = editorRegionNames(mode);
+  const labels = mode === 'gaming'
+    ? { webcam: 'Webcam', game: 'Game' }
+    : { speaker_a: 'Speaker A', speaker_b: 'Speaker B' };
+  const top = $('#clip-editor-layout-top');
+  top.replaceChildren(...names.map(name => el('option', { value: name, textContent: labels[name] })));
+  top.value = names[0] || '';
+  activeEditorRegion = names[0] || '';
+  document.querySelectorAll('[data-editor-region]').forEach(button => {
+    button.hidden = !names.includes(button.dataset.editorRegion);
+  });
+  if (framePreview) {
+    $('#clip-editor-frame').max = Number(clip?.duration || 0).toFixed(2);
+    $('#clip-editor-frame').value = $('#clip-editor-start').value || '0';
+    if (composition) {
+      $('#clip-editor-region-hint').textContent = mode === 'gaming'
+        ? 'Select Webcam or Game, then draw that region on the original frame.'
+        : 'Select Speaker A or B, then draw each camera region on the original frame.';
+    }
+    seekEditorSourceFrame();
+    if (composition) resizeEditorRegionCanvas();
+  }
+  if (!composition) {
+    if (clip) {
+      if (!sourcePreview) {
+        const clipUrl = `/media/${editorJobId}/${clip.file}`;
+        if (video.getAttribute('src') !== clipUrl) video.src = clipUrl;
+      }
+      $('#clip-editor-status').textContent = `${clip.title || clip.file} · original preserved`;
+    }
+  }
+  updateEditorRegionControls();
+  updateEditorRenderButton();
+}
+
+function updateEditorRegionControls() {
+  document.querySelectorAll('[data-editor-region]').forEach(button => {
+    button.classList.toggle('active', button.dataset.editorRegion === activeEditorRegion);
+    button.setAttribute('aria-pressed', String(button.dataset.editorRegion === activeEditorRegion));
+  });
+  drawEditorRegions();
+}
+
+function updateEditorRenderButton() {
+  const mode = $('#clip-editor-layout-mode').value;
+  const clip = editorClips.find(item => item.file === $('#clip-editor-clip').value);
+  const ready = editorRegionNames(mode).every(name => editorBoxes[name]);
+  $('#clip-editor-render').disabled = !$('#clip-editor-clip').value
+    || (clip?.source && !(clip.duration > 0))
+    || (mode !== 'standard' && (!editorSourceFile || !ready));
+}
+
+function seekEditorSourceFrame() {
+  const mode = $('#clip-editor-layout-mode').value;
+  const clip = editorClips.find(item => item.file === $('#clip-editor-clip').value);
+  if (!clip || (mode === 'standard' && !clip.source)) return;
+  const offset = Number($('#clip-editor-frame').value || 0);
+  if (!Number.isFinite(offset)) return;
+  clearTimeout(editorFrameTimer);
+  editorFrameTimer = setTimeout(() => {
+    const url = `/api/jobs/${editorJobId}/frame?file=${encodeURIComponent(clip.file)}&time=${offset.toFixed(2)}`;
+    const image = $('#clip-editor-source-frame');
+    if (image.getAttribute('src') !== url) image.src = url;
+  }, 250);
+}
+
+function resizeEditorRegionCanvas() {
+  const canvas = $('#clip-editor-regions');
+  if (canvas.classList.contains('hidden')) return;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * scale);
+  canvas.height = Math.round(rect.height * scale);
+  const context = canvas.getContext('2d');
+  context.setTransform(scale, 0, 0, scale, 0, 0);
+  drawEditorRegions();
+}
+
+function drawEditorRegions() {
+  const canvas = $('#clip-editor-regions');
+  if (canvas.classList.contains('hidden') || !canvas.width || !canvas.height) return;
+  const context = canvas.getContext('2d');
+  const scale = window.devicePixelRatio || 1;
+  const width = canvas.width / scale;
+  const height = canvas.height / scale;
+  context.clearRect(0, 0, width, height);
+  const colors = { webcam: '#38bdf8', game: '#4ade80', speaker_a: '#38bdf8', speaker_b: '#f472b6' };
+  const names = editorRegionNames();
+  for (const name of names) {
+    const region = editorBoxes[name];
+    if (!region) continue;
+    const x = region.x * width;
+    const y = region.y * height;
+    const regionWidth = region.width * width;
+    const regionHeight = region.height * height;
+    context.fillStyle = `${colors[name]}22`;
+    context.strokeStyle = colors[name];
+    context.lineWidth = 2;
+    context.fillRect(x, y, regionWidth, regionHeight);
+    context.strokeRect(x, y, regionWidth, regionHeight);
+    context.font = '12px system-ui';
+    context.fillStyle = colors[name];
+    context.fillText(name.replace('_', ' ').toUpperCase(), x + 5, Math.max(14, y + 15));
+  }
+  if (editorDrawing) {
+    const x = Math.min(editorDrawing.startX, editorDrawing.currentX) * width;
+    const y = Math.min(editorDrawing.startY, editorDrawing.currentY) * height;
+    const regionWidth = Math.abs(editorDrawing.currentX - editorDrawing.startX) * width;
+    const regionHeight = Math.abs(editorDrawing.currentY - editorDrawing.startY) * height;
+    context.strokeStyle = colors[activeEditorRegion] || '#ffd400';
+    context.lineWidth = 2;
+    context.setLineDash([6, 4]);
+    context.strokeRect(x, y, regionWidth, regionHeight);
+    context.setLineDash([]);
+  }
+}
+
+function editorPointerPoint(event) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return {
+    x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+    y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+  };
+}
+
+function startEditorRegion(event) {
+  if (!activeEditorRegion || $('#clip-editor-layout-mode').value === 'standard') return;
+  const point = editorPointerPoint(event);
+  editorDrawing = { startX: point.x, startY: point.y, currentX: point.x, currentY: point.y };
+  event.currentTarget.setPointerCapture(event.pointerId);
+  drawEditorRegions();
+}
+
+function moveEditorRegion(event) {
+  if (!editorDrawing) return;
+  const point = editorPointerPoint(event);
+  editorDrawing.currentX = point.x;
+  editorDrawing.currentY = point.y;
+  drawEditorRegions();
+}
+
+function finishEditorRegion(event) {
+  if (!editorDrawing) return;
+  const point = editorPointerPoint(event);
+  const left = Math.min(editorDrawing.startX, point.x);
+  const top = Math.min(editorDrawing.startY, point.y);
+  const width = Math.abs(point.x - editorDrawing.startX);
+  const height = Math.abs(point.y - editorDrawing.startY);
+  editorDrawing = null;
+  if (width < 0.02 || height < 0.02) {
+    $('#clip-editor-status').textContent = 'Draw a larger region on the source frame.';
+    drawEditorRegions();
+    return;
+  }
+  editorBoxes[activeEditorRegion] = { x: left, y: top, width, height };
+  $('#clip-editor-status').textContent = `${activeEditorRegion.replace('_', ' ')} region selected. Draw the other region next.`;
+  drawEditorRegions();
+  updateEditorRenderButton();
+}
+
+async function renderEditorClip() {
+  const button = $('#clip-editor-render');
+  const filename = $('#clip-editor-clip').value;
+  const jobId = editorJobId;
+  const status = $('#clip-editor-status');
+  button.disabled = true;
+  status.textContent = 'Rendering edited copy…';
+  try {
+    const edited = await api(`/api/jobs/${jobId}/edit`, {
+      file: filename,
+      start: Number($('#clip-editor-start').value),
+      end: Number($('#clip-editor-end').value),
+      aspect: $('#clip-editor-aspect').value,
+      crop: $('#clip-editor-crop').value,
+      volume: Number($('#clip-editor-volume').value),
+      speed: Number($('#clip-editor-speed').value),
+      layout: $('#clip-editor-layout-mode').value,
+      top: $('#clip-editor-layout-top').value,
+      camera_share: Number($('#clip-editor-camera-share').value),
+      ...(editorBoxes.webcam ? { webcam_box: editorBoxes.webcam } : {}),
+      ...(editorBoxes.game ? { game_box: editorBoxes.game } : {}),
+      ...(editorBoxes.speaker_a ? { speaker_a_box: editorBoxes.speaker_a } : {}),
+      ...(editorBoxes.speaker_b ? { speaker_b_box: editorBoxes.speaker_b } : {}),
+    });
+    await loadJobs();
+    if ($('#clip-editor-layout-mode').value === 'standard') {
+      $('#clip-editor-video').src = `/media/${jobId}/${edited.file}`;
+    }
+    status.textContent = `${edited.file} added to Clip Studio for review. The source video was not changed.`;
+  } catch (error) {
+    status.textContent = `Could not render edit: ${error.message}`;
+  } finally {
+    updateEditorRenderButton();
+  }
+}
+
+async function loadSocialPublishing() {
+  const message = $('#social-publisher-message');
+  const platforms = $('#social-platform-status');
+  message.textContent = 'Checking direct publishing setup…';
+  platforms.replaceChildren();
+  try {
+    const status = await api('/api/publishing/status');
+    const names = { youtube: 'YouTube', instagram: 'Instagram Reels', facebook: 'Facebook Reels', x: 'X video' };
+    const configured = Object.keys(names).filter(platform => status[platform]?.configured);
+    platforms.replaceChildren(...Object.keys(names).map(platform => el('div', { class: 'social-account' },
+      el('div', { class: 'social-account-info' },
+        el('strong', { textContent: names[platform] }),
+        el('span', { class: 'social-account-detail', textContent: status[platform]?.message || 'Not configured' })),
+      badge(status[platform]?.configured ? 'Ready' : 'Setup needed', status[platform]?.configured ? 'approved' : 'pending'))));
+    message.textContent = `${configured.length} of ${Object.keys(names).length} platforms configured. Credentials are read from Agenttube’s .env and OAuth files.`;
+    await loadScheduledPosts();
+  } catch (error) {
+    message.textContent = `Could not load publishing status: ${error.message}`;
+  }
+}
+
+async function loadScheduledPosts() {
+  const container = $('#scheduled-posts');
+  try {
+    const posts = await api('/api/scheduled-posts');
+    container.replaceChildren(...(posts.length ? posts.map(post => el('div', { class: 'social-account' },
+      el('div', { class: 'social-account-info' },
+        el('strong', { textContent: post.title }),
+        el('span', { class: 'social-account-detail', textContent:
+          `${post.job_title} · ${post.file} · ${post.platforms.join(', ')} · ${new Date(post.scheduled_at).toLocaleString()}` }),
+        ...(post.results || []).map(result => el('span', {
+          class: `social-account-detail ${result.ok ? '' : 'error'}`,
+          textContent: `${result.platform}: ${result.ok ? result.url : result.error}`,
+        }))),
+      badge(post.status, post.status === 'published' ? 'approved' : post.status === 'failed' ? 'rejected' : 'pending'),
+      post.status === 'scheduled' ? el('button', { class: 'small danger', textContent: 'Cancel',
+        onclick: async event => {
+          event.currentTarget.disabled = true;
+          try {
+            await api(`/api/scheduled-posts/${post.id}/cancel`, {});
+            await loadScheduledPosts();
+          } catch (error) { alert(error.message); event.currentTarget.disabled = false; }
+        } }) : null)) : [el('p', { class: 'muted', textContent: 'No scheduled posts.' })]));
+  } catch (error) {
+    container.replaceChildren(el('p', { class: 'error', textContent: `Could not load scheduled posts: ${error.message}` }));
+  }
+}
 
 // ── viral clone ──
 let selectedClone = null;
@@ -795,9 +1704,15 @@ async function makeFromVariant(variant) {
   try {
     const job = await api('/api/jobs', { mode: 'create', source: 'clone', clone_job: selectedClone, variant,
       format: form.format.value, look: form.look.value, voice: form.voice.value, niche: form.niche.value });
-    selectedClone = job.id;
-    loadJobs();
+    await openCreatedJobInReview(job);
   } catch (error) { alert(error.message); }
+}
+
+async function openCreatedJobInReview(job) {
+  selectedJob = job.id;
+  document.querySelector('[data-tab="studio"]').click();
+  document.querySelector('[data-studio-view="videos"]').click();
+  await loadJobs();
 }
 
 async function reviewFor(jobId, file, status) {
@@ -810,8 +1725,7 @@ $('#create-form').addEventListener('submit', async (event) => {
   $('#create-error').textContent = '';
   try {
     const job = await api('/api/jobs', { ...Object.fromEntries(new FormData(event.target)), mode: 'create' });
-    selectedClone = job.id;
-    loadJobs();
+    await openCreatedJobInReview(job);
   } catch (error) { $('#create-error').textContent = error.message; }
 });
 
@@ -828,6 +1742,7 @@ async function searchInspiration() {
       el('div', { style: 'margin-top:6px; white-space:pre-wrap; max-height:110px; overflow:auto', textContent: item.prompt || '' }),
       el('div', { class: 'actions' }, el('button', { class: 'small', textContent: 'Use as idea', onclick: () => {
         const form = $('#create-form');
+        document.querySelector('[data-tab="video-generator"]').click();
         form.source.value = 'idea';
         form.text.value = `Inspired by @${item.author} (${item.post_url || item.author_url}):\n${item.prompt}`;
         form.text.focus();
@@ -841,17 +1756,60 @@ $('#insp-q').addEventListener('keydown', (event) => { if (event.key === 'Enter')
 // ── automation agent ──
 async function loadAgent() {
   const status = await api('/api/agent');
-  $('#agent-open').href = status.url;
   const health = status.health || {};
-  $('#agent-badge').replaceChildren(status.running
-    ? badge(health.setupRequired ? 'running · setup required' : 'running', 'finished')
-    : badge(status.ready ? 'stopped' : 'npm install needed', 'stopped'));
+  const setupRequired = status.running && health.setupRequired;
+  const starting = status.managed && !status.running;
+  const state = status.running ? setupRequired ? 'setup required' : 'running'
+    : starting ? 'starting' : status.ready ? 'stopped' : 'dependencies missing';
+  $('#agent-badge').replaceChildren(badge(state, status.running && !setupRequired ? 'finished' : 'stopped'));
+  $('#agent-meta').textContent = !status.ready
+    ? 'Agent dependencies are missing. Run npm install in the Agenttube project folder before starting the service.'
+    : setupRequired
+      ? 'The service is running in setup mode. Generation and publishing are disabled until YouTube and an AI provider are configured.'
+      : starting ? 'The service is starting. This tab will update when its dashboard is ready.'
+        : status.running ? 'The Agent dashboard is running. Its own channel strategy controls generation and its publishing queue.'
+          : 'The Agent service is stopped. Start it here to open its dashboard.';
+  $('#agent-start').disabled = !status.ready || status.running || starting;
+  $('#agent-stop').hidden = !status.managed;
+  $('#agent-stop').disabled = !status.running;
+  $('#agent-open').dataset.url = status.url;
+  $('#agent-open').disabled = !status.running;
   $('#agent-log').textContent = status.log || '';
   const frame = $('#agent-frame');
   frame.classList.toggle('hidden', !status.running);
   if (status.running && frame.dataset.loaded !== '1') { frame.src = status.url; frame.dataset.loaded = '1'; }
   if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
 }
+
+$('#agent-start').addEventListener('click', async () => {
+  const button = $('#agent-start');
+  button.disabled = true;
+  $('#agent-meta').textContent = 'Starting the Automation Agent service…';
+  try {
+    await api('/api/agent/start', {});
+    await loadAgent();
+  } catch (error) {
+    $('#agent-meta').textContent = `Could not start the service: ${error.message}`;
+    button.disabled = false;
+  }
+});
+
+$('#agent-stop').addEventListener('click', async () => {
+  const button = $('#agent-stop');
+  button.disabled = true;
+  try {
+    await api('/api/agent/stop', {});
+    await loadAgent();
+  } catch (error) {
+    $('#agent-meta').textContent = `Could not stop the service: ${error.message}`;
+    button.disabled = false;
+  }
+});
+
+$('#agent-open').addEventListener('click', () => {
+  if ($('#agent-open').disabled) return;
+  window.open($('#agent-open').dataset.url, '_blank', 'noopener');
+});
 
 setInterval(() => { if (activeTab === 'agent') loadAgent(); }, 8000);
 
@@ -871,58 +1829,6 @@ async function loadVideoStudio() {
 
 setInterval(() => { if (activeTab === 'video') loadVideoStudio(); }, 5000);
 
-// ── MoneyPrinterTurbo ──
-async function loadMpt() {
-  const status = await api('/api/moneyprinterturbo');
-  $('#mpt-badge').replaceChildren(status.running
-    ? badge('running', 'finished')
-    : badge(status.ready ? 'stopped' : 'setup required', 'stopped'));
-  $('#mpt-open').disabled = !status.ready;
-  $('#mpt-setup').classList.toggle('hidden', status.ready);
-  $('#mpt-log').textContent = status.log || '';
-  const frame = $('#mpt-frame');
-  frame.classList.toggle('hidden', !status.running);
-  if (status.running && frame.dataset.loaded !== '1') { frame.src = status.url; frame.dataset.loaded = '1'; }
-  if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
-}
-
-let mptStartPromise = null;
-
-function startMptWhenReady() {
-  if (!mptStartPromise) {
-    mptStartPromise = ensureMptWhenReady().finally(() => { mptStartPromise = null; });
-  }
-  return mptStartPromise;
-}
-
-async function ensureMptWhenReady() {
-  const initial = await api('/api/moneyprinterturbo');
-  if (initial.running) { await loadMpt(); return initial.url; }
-  if (!initial.ready) { await loadMpt(); return null; }
-  await api('/api/moneyprinterturbo/start', {});
-  for (let i = 0; i < 80; i++) {
-    await new Promise(resolve => setTimeout(resolve, 750));
-    const status = await api('/api/moneyprinterturbo');
-    await loadMpt();
-    if (status.running) return status.url;
-  }
-  throw new Error('MoneyPrinterTurbo did not become ready. Check its log and setup instructions.');
-}
-
-$('#mpt-open').addEventListener('click', async () => {
-  const popup = window.open('about:blank', '_blank');
-  if (!popup) { alert('Allow pop-ups to open MoneyPrinterTurbo separately.'); return; }
-  popup.opener = null;
-  try {
-    const url = await startMptWhenReady();
-    popup.location.replace(url);
-  } catch (error) {
-    popup.close();
-    alert(error.message);
-  }
-});
-
-setInterval(() => { if (activeTab === 'moneyprinterturbo') loadMpt(); }, 5000);
 </script>
 </body>
 </html>

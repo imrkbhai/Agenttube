@@ -2,7 +2,7 @@
 
 **A local dashboard for clipping, creating, reviewing, and managing YouTube video workflows.**
 
-Clip Studio opens first: paste a video link or upload a file, manage creators, then review generated clips in **All Videos**. The other tabs bring Viral Clone & Create, the original YouTube Automation Agent, Video Studio, and MoneyPrinterTurbo into the same dashboard. Each tool keeps its own workflow and setup.
+Clip Studio opens first: paste a video link or upload a file, manage creators, then review generated clips in **All Videos**. Native Video Generator, Clip Editor, and Social Publishing tabs handle original video creation, clip edits, and publishing without launching separate applications.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js 18.17+](https://img.shields.io/badge/node-18.17%2B-43853d.svg)](package.json)
@@ -17,10 +17,10 @@ Clip Studio opens first: paste a video link or upload a file, manage creators, t
 
 ## Why it's different
 
-- **One dashboard, distinct workflows.** Clip Studio, Viral Clone & Create, and the integrated studios remain separate tools with their own setup and data.
+- **One dashboard, distinct workflows.** Clip Studio, Viral Clone, Video Generator, Clip Editor, and Social Publishing share one review and publishing flow.
 - **Review clips before you use them.** Clip Studio produces local files for review; it does not publish them to YouTube.
 - **Local-first.** Dashboard services run on your machine, with outputs kept in their configured data folders.
-- **Choose the right workflow.** Use Clip Studio for permitted source footage, Video Studio or MoneyPrinterTurbo for original videos, and Automation Agent for channel planning and publishing.
+- **Choose the right workflow.** Use Clip Studio for permitted source footage, Video Generator for narrated original videos, Clip Editor for post-render changes, and Automation Agent for channel planning.
 
 ## Quick start
 
@@ -41,24 +41,25 @@ The dashboard opens on Clip Studio Home. Use **All Videos** to follow jobs and r
 | Tab | What it does |
 | --- | --- |
 | Clip Studio | Home has the URL/upload composer and creator list; All Videos shows job progress and clip review. |
-| Viral Clone & Create | Analyzes a reference video's structure, writes variants, and creates original videos. |
+| Viral Clone | Analyzes a reference video's structure and writes original script variants. |
+| Video Generator | Turns an idea or script into a narrated, captioned video using Agenttube's local rendering workflow. |
 | Automation Agent | Embeds the original channel automation dashboard when its service is running. |
 | Video Studio | Shows status and logs for the original-video workflow and can open its interface separately. |
-| MoneyPrinterTurbo | Opens the Streamlit video-generation workflow; selecting the tab starts it when configured. |
+| Clip Editor | Trims and reframes clips, or builds manual Gaming/Reaction and Podcast split layouts from the retained source video; edits are new reviewable copies. |
+| Social Publishing | Publishes directly to configured platforms and manages Agenttube's local post schedule. |
 
 PeakCut is not a dashboard tab. Its source remains available separately in [`peakcut/`](peakcut/README.md).
 
 ## Automation Agent
 
-The Automation Agent is the original YouTube channel-management application, running as a separate Node.js service on port 3456. Its dashboard tab shows service status, logs, and an **Open in new window** link; start the service from the Agenttube folder:
+The Automation Agent is the original YouTube channel-management application, running as a separate Node.js service on port 3456. Its dashboard tab shows service status and readable logs, and can start or stop the service. After installing dependencies, finish credential setup in a terminal from the Agenttube folder:
 
 ```bash
 npm install
-npm run walkthrough
-npm start
+npm run credentials:setup
 ```
 
-`npm run walkthrough` configures providers and connects the channel. `npm run setup` offers a shorter setup. Settings are documented in [`.env.example`](.env.example).
+The setup wizard connects YouTube and configures an AI provider and channel settings. Keep API keys in the terminal, not the dashboard. Once setup is complete, click **Start service** in the tab. The Agent schedules content created in its own channel workflow; it does not automatically import or schedule files uploaded to Clip Studio. To publish or schedule a Clip Studio clip, approve it in **All Videos** and choose **Publish…**. Settings are documented in [`.env.example`](.env.example).
 
 ### YouTube credentials
 
@@ -118,6 +119,8 @@ npm run clip:dashboard   # then open http://127.0.0.1:8765
 
 **Dashboard.** Home contains the URL/upload composer and creator list. Save creators you have permission to clip (channel link, permission record, niche), press **Check live** to see who is streaming, then **Clip live now** or **Clip a video**. **All Videos** shows job progress and opens the review view; each clip plays with its titles, alternative titles and scores, and you can approve or reject it there. The dashboard listens on `127.0.0.1` only. Finished MP4s are saved in `data/clips/<job-id>/` (for example, `short_01.mp4` and `long_01.mp4`).
 
+**Publish.** Approve a finished clip, choose **Publish…**, select one or more connected platforms, review its title and optional caption, then publish. YouTube privacy defaults to private. Configure each account in `.env` first; see the [publishing guide](docs/publishing.md). Published post links appear on the clip card.
+
 **Live streams.** Live mode records the stream from now on and transcribes it in 5-minute windows while it plays, cutting Shorts as highlights happen (`--live-shorts`, 0 = only after the stream). When the stream ends or you press **Stop**, long clips are made from the full recording. It uses the faster `base` Whisper model by default to keep up on a CPU.
 
 **Viral Clone & Create tab.** Paste a video that performed well and a topic: it is transcribed locally, Gemini maps its structure (hook, beats, pacing, payoff, CTA) and writes new scripts that follow the same structure for your topic. Only the structure is reused, never footage or sentences, and the downloaded audio is deleted afterwards. Inspired by [Hypit](https://github.com/hypit-ai/hypit)'s "clone any viral video" idea; independently implemented. CLI: `npm run clip -- <url> --clone-topic "your topic" --variants 3`.
@@ -149,21 +152,9 @@ Then open the **Video Studio** tab in Agenttube or visit `http://127.0.0.1:7070`
 
 **PeakCut (standalone).** PeakCut is not a tab in the Agenttube dashboard. Its source and MIT license remain in [`peakcut/`](peakcut/README.md), and its local data stays in `peakcut-data/`.
 
-**MoneyPrinterTurbo tab.** Runs the upstream [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) Streamlit app in its own Python 3.11 environment. It complements the existing create workflow with a broad set of script, stock/AI footage, voice, subtitle, music, and batch-generation options. Its upstream source is MIT licensed; retain its `LICENSE` and notices. Individual media assets and provider services may have separate terms or charges.
+**Video Generator and Clip Editor tabs.** Both use Agenttube's own Python/FFmpeg pipeline and the existing Clip Studio job store. Generated and edited videos appear in **All Videos**, where the same approval and direct publishing controls apply. No MoneyPrinterTurbo service or Docker setup is required.
 
-Install the source and dependencies once from the Agenttube folder (the source path should not contain spaces or non-ASCII characters on Windows):
-
-```powershell
-curl.exe --ssl-no-revoke -fL https://github.com/harry0703/MoneyPrinterTurbo/archive/refs/heads/main.zip -o moneyprinterturbo-source.zip
-Expand-Archive moneyprinterturbo-source.zip -DestinationPath .
-Move-Item MoneyPrinterTurbo-main moneyprinterturbo
-Remove-Item moneyprinterturbo-source.zip
-uv python install 3.11
-uv --system-certs sync --project moneyprinterturbo --frozen --python 3.11
-npm run clip:dashboard
-```
-
-Select **MoneyPrinterTurbo** to start it automatically, or use **Open separately** if the embedded Streamlit view is unavailable in your browser. The tab shows status and logs; it has no Start/Stop buttons. The WebUI binds to `127.0.0.1:8768`; the API service is not started. `MPT_HOME` points to the ignored `moneyprinterturbo-data/` folder for credentials, settings, and generated videos. To update the upstream source, replace the extracted source while keeping `moneyprinterturbo-data/` intact.
+**Social Publishing tab.** Configure YouTube OAuth, Meta publishing credentials, or an X user token using the environment variables in [`.env.example`](.env.example). Scheduling is stored in `data/clips/scheduled-posts.json` and runs in the Agenttube dashboard process; keep the dashboard running at the scheduled time. The queue is local to this machine, and no third-party post-management service is required.
 
 ## Automation Agent providers
 
@@ -196,6 +187,7 @@ Details are in the [feature guide](docs/features.md#automation-schedule).
 - [Feature guide](docs/features.md): a walkthrough of every studio and gate.
 - [AI providers](docs/providers.md): text, narration, image, and video providers with keys and limits.
 - [API reference](docs/api.md): every HTTP route the dashboard server exposes, for example `POST /generate` with `x-api-key`.
+- [Social publishing](docs/publishing.md): configure YouTube, Instagram, Facebook, and X uploads from Clip Studio.
 - [Troubleshooting](docs/troubleshooting.md): fixes for setup, sign-in, and generation problems.
 - [Changelog](CHANGELOG.md) and [Agenttube releases](https://github.com/imrkbhai/Agenttube/releases).
 
