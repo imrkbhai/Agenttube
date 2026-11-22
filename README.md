@@ -41,7 +41,7 @@ The dashboard opens on Clip Studio Home. Use **All Videos** to follow jobs and r
 | Tab | What it does |
 | --- | --- |
 | Clip Studio | Home has the URL/upload composer and creator list; All Videos shows job progress and clip review. |
-| Viral Clone | Analyzes a reference video's structure and writes original script variants. |
+| Viral Clone | Analyzes a linked or uploaded reference, writes full scripts or shared-body hook tests, and can render a variant using the reference's measured format, color and motion. |
 | Video Generator | Turns an idea or script into a narrated, captioned video using Agenttube's local rendering workflow. |
 | Automation Agent | Opens the channel automation workspace inside Agenttube and starts its runtime on demand. |
 | Video Studio | Shows status and logs for the original-video workflow and can open its interface separately. |
@@ -123,7 +123,7 @@ npm run clip:dashboard   # then open http://127.0.0.1:8765
 
 **Live streams.** Live mode records the stream from now on and transcribes it in 5-minute windows while it plays, cutting Shorts as highlights happen (`--live-shorts`, 0 = only after the stream). When the stream ends or you press **Stop**, long clips are made from the full recording. It uses the faster `base` Whisper model by default to keep up on a CPU.
 
-**Viral Clone & Create tab.** Paste a video that performed well and a topic: it is transcribed locally, Gemini maps its structure (hook, beats, pacing, payoff, CTA) and writes new scripts that follow the same structure for your topic. Only the structure is reused, never footage or sentences, and the downloaded audio is deleted afterwards. Inspired by [Hypit](https://github.com/hypit-ai/hypit)'s "clone any viral video" idea; independently implemented. CLI: `npm run clip -- <url> --clone-topic "your topic" --variants 3`.
+**Viral Clone & Create tab.** Paste a video link or upload a reference file (MP4, MOV, MKV, WebM, M4V or AVI, up to 4 GB) and enter the topic for the new scripts. The reference is analyzed locally for framing, shot changes, motion, color and spoken structure; Gemini writes original scripts from that profile. Choose full scripts or test up to 100 different hooks against one shared body. Use **Make video** on a variant to render it; **Match reference format, colors and motion** applies the measured aspect, palette, edit pace and movement to the existing local renderer. Reference footage and sentences are not reused. Inspired by [Hypit](https://github.com/hypit-ai/hypit)'s "clone any viral video" idea; independently implemented. CLI: `npm run clip -- <url> --clone-topic "your topic" --variants 3`.
 
 **Create a video (free, any topic).** Paste your own script (narrated exactly as written), describe an idea (Gemini's free tier writes the script), or press **Make video** on a clone variant. Each scene gets a free-licence Wikimedia Commons image with a slow camera move, a look (documentary, studio, blueprint, night), on-screen words that land on the spoken word, word-by-word captions, a synthesised whoosh between scenes and loudness-normalised audio. The voice is Microsoft Edge TTS when reachable, otherwise the offline Windows voice; word timing comes from local Whisper, so any voice works. Every job writes `credits.md` and an SRT, and attribution goes into the description. Method adapted from [cinematic-skill](https://github.com/Moh4696/cinematic-skill) (MIT). CLI: `npm run clip -- script.txt --create script --format short --look documentary`.
 

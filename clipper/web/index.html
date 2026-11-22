@@ -19,6 +19,8 @@
   h2 { font-size:15px; margin:0 0 12px; }
   label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
   input, select, textarea { width:100%; background:#0c0e12; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
+  .clone-style-match { display:flex; align-items:center; gap:8px; margin:12px 0; }
+  .clone-style-match input { width:auto; margin:0; }
   .row { display:flex; gap:8px; } .row > * { flex:1; }
   button { background:#232835; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 12px; font:inherit; cursor:pointer; }
   button:hover { border-color:#3a4152; }
@@ -2050,6 +2052,9 @@ async function loadCloneDetail() {
       el('p', { class: 'muted', textContent: `Pacing: ${text(bp.pacing)}` }),
       el('p', { class: 'muted', textContent: `Captions: ${text(bp.captions)} · Visuals: ${text(bp.visuals)}` }),
       el('p', { class: 'muted', textContent: `CTA: ${text(bp.cta)} · Why it works: ${text(bp.why_it_works)}` })),
+    el('label', { class: 'clone-style-match' },
+      el('input', { id: 'clone-match-reference', type: 'checkbox', checked: true }),
+      el('span', { textContent: 'Match reference format, colors and motion when rendering' })),
     el('h2', { textContent: `Variants for "${blueprint.topic}"` }),
     ...(blueprint.variants || []).map((variant, index) => el('div', { class: 'variant' },
       el('div', { class: 'title', textContent: `${index + 1}. ${text(variant.title)}` }),
@@ -2068,7 +2073,8 @@ async function makeFromVariant(variant) {
   const form = $('#create-form');
   try {
     const job = await api('/api/jobs', { mode: 'create', source: 'clone', clone_job: selectedClone, variant,
-      format: form.format.value, look: form.look.value, voice: form.voice.value, niche: form.niche.value });
+      format: form.format.value, look: form.look.value, voice: form.voice.value, niche: form.niche.value,
+      match_reference: $('#clone-match-reference')?.checked ?? false });
     await openCreatedJobInReview(job);
   } catch (error) { alert(error.message); }
 }

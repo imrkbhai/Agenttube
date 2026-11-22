@@ -46,6 +46,32 @@ LOOKS = {
 CAMERA_MOVES = ("push", "pan_right", "pull", "pan_left")
 
 
+def reference_render_profile(style: dict) -> dict:
+    aspect = str(style.get("aspect") or "portrait").lower()
+    fmt = "long" if aspect == "landscape" else "short"
+    match = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(style.get("average_color") or ""))
+    color = tuple(int(match.group(1)[index:index + 2], 16) for index in (0, 2, 4)) if match else (128, 128, 128)
+    red, green, blue = color
+    luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    saturation = 0.9 + (max(color) - min(color)) / 255 * 0.25
+    shifts = [((channel - (sum(color) - channel) / 2) / 255) * 0.12 for channel in color]
+    accent = f"&H00{blue:02X}{green:02X}{red:02X}"
+    dark = tuple(round(channel * 0.24) for channel in color)
+    light = tuple(round(channel * 0.68 + 82) for channel in color)
+    motion = {"low": 0.045, "moderate": 0.09, "high": 0.14}.get(style.get("motion_level"), 0.09)
+    pace = {"slow": 0.045, "moderate": 0.09, "fast": 0.14}.get(style.get("edit_pace"), 0.09)
+    look = {
+        "grade": (f"eq=contrast=1.04:saturation={saturation:.3f},"
+                  f"colorbalance=rs={shifts[0]:.3f}:gs={shifts[1]:.3f}:bs={shifts[2]:.3f}"),
+        "box": accent,
+        "text": "&H00101010" if luminance > 145 else "&H00FFFFFF",
+        "card": (dark, light),
+        "highlight": accent + "&",
+    }
+    return {"format": fmt, "look": look, "camera_strength": (motion + pace) / 2,
+            "aspect": aspect, "average_color": f"#{red:02X}{green:02X}{blue:02X}"}
+
+
 # ── planning ────────────────────────────────────────────────────────────────
 
 def _keywords(text: str, limit: int = 3) -> str:
@@ -317,22 +343,24 @@ def title_card(text: str, out: Path, size: tuple, look: dict, index: int = 0) ->
 
 # ── rendering ───────────────────────────────────────────────────────────────
 
-def _camera(move: str, frames: int) -> str:
+def _camera(move: str, frames: int, strength: float = 0.14) -> str:
     p = f"(on/{max(frames - 1, 1)})"
+    zoom = f"{strength:.3f}"
     return {
-        "push": f"z='1+0.14*{p}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
-        "pull": f"z='1.14-0.14*{p}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
-        "pan_right": f"z='1.14':x='(iw-iw/zoom)*{p}':y='ih/2-(ih/zoom/2)'",
-        "pan_left": f"z='1.14':x='(iw-iw/zoom)*(1-{p})':y='ih/2-(ih/zoom/2)'",
+        "push": f"z='1+{zoom}*{p}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
+        "pull": f"z='1+{zoom}-{zoom}*{p}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
+        "pan_right": f"z='1+{zoom}':x='(iw-iw/zoom)*{p}':y='ih/2-(ih/zoom/2)'",
+        "pan_left": f"z='1+{zoom}':x='(iw-iw/zoom)*(1-{p})':y='ih/2-(ih/zoom/2)'",
     }[move]
 
 
-def render_scene(image: Path, out: Path, frames: int, size: tuple, move: str, grade: str) -> None:
+def render_scene(image: Path, out: Path, frames: int, size: tuple, move: str, grade: str,
+                 move_strength: float = 0.14) -> None:
     width, height = size
     # Oversample before zoompan so the slow camera move doesn't judder.
     vf = (f"scale={width * 3 // 2}:{height * 3 // 2}:force_original_aspect_ratio=increase,"
           f"crop={width * 3 // 2}:{height * 3 // 2},"
-          f"zoompan={_camera(move, frames)}:d={frames}:s={width}x{height}:fps={FPS},"
+          f"zoompan={_camera(move, frames, move_strength)}:d={frames}:s={width}x{height}:fps={FPS},"
           f"{grade},vignette=PI/5,format=yuv420p")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(image), "-vf", vf, "-frames:v", str(frames),
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-r", str(FPS), str(out)], check=True)
@@ -357,7 +385,7 @@ Style: Title,Arial Black,{title},{look['text']},{look['text']},{look['box']},{lo
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """]
-    highlight = "&H0000E5FF&"
+    highlight = look.get("highlight", "&H0000E5FF&")
     for chunk in _word_chunks(words, 3 if vertical else 7):
         texts = [_escape(w["word"]).upper() if vertical else _escape(w["word"]) for w in chunk]
         if vertical:
@@ -421,21 +449,37 @@ def assemble(job_dir: Path, work: Path, scenes: list, ass: Path, out: Path) -> N
 
 
 def run_create(job_dir: Path, mode: str, text: str, fmt: str, look_name: str, voice: str, niche: str,
-               language: str | None, clone_job: Path | None = None, variant: int = 0) -> None:
-    size, look = SIZES[fmt], LOOKS.get(look_name, LOOKS["documentary"])
+               language: str | None, clone_job: Path | None = None, variant: int = 0,
+               match_reference: bool = False) -> None:
     work = job_dir / "work"
     work.mkdir(exist_ok=True)
 
     clone_variant = None
+    reference_profile = None
     if clone_job is not None:
         blueprint = read_json(clone_job / "blueprint.json") or {}
         variants = blueprint.get("variants") or []
         if not 0 <= variant < len(variants):
             raise RuntimeError("That clone job has no such variant.")
         clone_variant = variants[variant]
+        if match_reference and isinstance(blueprint.get("style_analysis"), dict):
+            reference_profile = reference_render_profile(blueprint["style_analysis"])
+            fmt = reference_profile["format"]
+            look = reference_profile["look"]
+            move_strength = reference_profile["camera_strength"]
+        else:
+            look = LOOKS.get(look_name, LOOKS["documentary"])
+            move_strength = 0.14
+    else:
+        look = LOOKS.get(look_name, LOOKS["documentary"])
+        move_strength = 0.14
+    size = SIZES[fmt]
 
     update_job(job_dir, stage="Planning scenes")
     plan = plan_video(mode, text, fmt, niche, clone_variant)
+    if reference_profile:
+        plan["reference_style"] = {key: reference_profile[key]
+                                   for key in ("aspect", "average_color", "camera_strength")}
     scenes = plan["scenes"]
     if not scenes:
         raise RuntimeError("The script is empty.")
@@ -469,7 +513,8 @@ def run_create(job_dir: Path, mode: str, text: str, fmt: str, look_name: str, vo
         frames = max(end_frame - frame_clock, 1)
         frame_clock = end_frame
         scene["clip"] = str(work / f"scene_{i:03d}.mp4")
-        render_scene(image, Path(scene["clip"]), frames, size, CAMERA_MOVES[i % len(CAMERA_MOVES)], look["grade"])
+        render_scene(image, Path(scene["clip"]), frames, size, CAMERA_MOVES[i % len(CAMERA_MOVES)],
+                 look["grade"], move_strength)
 
     update_job(job_dir, stage="Captions, sound effects and final mix")
     ass = job_dir / "captions.ass"

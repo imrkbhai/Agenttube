@@ -84,6 +84,8 @@ def main() -> None:
     parser.add_argument("--create", choices=("script", "idea", "clone"),
                         help="Create an original video: source is a text file (script/idea) or a clone job id")
     parser.add_argument("--variant", type=int, default=1, help="Which clone variant to render (1-based)")
+    parser.add_argument("--match-reference-style", action="store_true",
+                        help="Match a clone reference's format, color palette and visual motion")
     parser.add_argument("--format", choices=("short", "long"), default="short", help="9:16 Short or 16:9 video")
     parser.add_argument("--look", choices=sorted(LOOKS), default="documentary", help="Visual look")
     parser.add_argument("--voice", default="en-US-AndrewNeural",
@@ -123,7 +125,7 @@ def main() -> None:
             else:
                 text = Path(args.source).read_text(encoding="utf-8-sig").strip()
             run_create(job_dir, args.create, text, args.format, args.look, args.voice, args.niche,
-                       args.language, clone_job, args.variant - 1)
+                       args.language, clone_job, args.variant - 1, args.match_reference_style)
             update_job(job_dir, state="finished")
             print(f"\nDone. Video saved for review in:\n   {job_dir}")
             return

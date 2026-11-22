@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from clipper import clone
+from clipper import clone, create
 
 
 class FakeCapture:
@@ -102,6 +102,26 @@ class LocalReferenceTests(unittest.TestCase):
         self.assertEqual(result["path"], str(reference.resolve()))
         self.assertEqual(result["title"], "reference")
         self.assertEqual(result["url"], "Uploaded: reference.mp4")
+
+
+class ReferenceRenderProfileTests(unittest.TestCase):
+    def test_builds_render_settings_from_reference_style(self):
+        profile = create.reference_render_profile({
+            "aspect": "landscape", "average_color": "#204060",
+            "motion_level": "low", "edit_pace": "slow",
+        })
+
+        self.assertEqual(profile["format"], "long")
+        self.assertEqual(profile["look"]["box"], "&H00604020")
+        self.assertEqual(profile["average_color"], "#204060")
+        self.assertAlmostEqual(profile["camera_strength"], 0.045)
+
+    def test_uses_safe_defaults_for_incomplete_style_data(self):
+        profile = create.reference_render_profile({})
+
+        self.assertEqual(profile["format"], "short")
+        self.assertEqual(profile["average_color"], "#808080")
+        self.assertGreater(profile["camera_strength"], 0)
 
 
 if __name__ == "__main__":

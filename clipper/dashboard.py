@@ -433,12 +433,17 @@ def start_create(body: dict) -> dict:
 
     job_id = new_job_id()
     job_dir = CLIPS_DIR / job_id
+    variant = 1
     if source == "clone":
         clone_id = _text(body, "clone_job", 40, required=True)
-        if not JOB_ID.match(clone_id) or not (CLIPS_DIR / clone_id / "blueprint.json").exists():
+        blueprint_path = CLIPS_DIR / clone_id / "blueprint.json"
+        if not JOB_ID.match(clone_id) or not blueprint_path.exists():
             raise BadRequest("unknown clone job")
+        blueprint = read_json(blueprint_path) or {}
+        variant_count = len(blueprint.get("variants") or [])
+        variant = _int(body, "variant", 1, 1, max(variant_count, 1))
         target = clone_id
-        label = f"Clone {clone_id} variant {_int(body, 'variant', 1, 1, 10)}"
+        label = f"Clone {clone_id} variant {variant}"
     else:
         text = str(body.get("text") or "").strip()[:60_000]
         if len(text) < 20:
@@ -452,7 +457,9 @@ def start_create(body: dict) -> dict:
                                        "state": "queued", "stage": "Starting"})
     command = [sys.executable, "-m", "clipper", target, f"--create={source}", f"--job-id={job_id}",
                f"--out={CLIPS_DIR}", f"--format={fmt}", f"--look={look}", f"--voice={voice}",
-               f"--variant={_int(body, 'variant', 1, 1, 10)}"]
+               f"--variant={variant}"]
+    if source == "clone" and str(body.get("match_reference") or "").lower() in ("true", "1", "on"):
+        command.append("--match-reference-style")
     if niche:
         command.append(f"--niche={niche}")
     return _spawn(job_id, job_dir, command)
