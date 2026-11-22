@@ -43,7 +43,7 @@ The dashboard opens on Clip Studio Home. Use **All Videos** to follow jobs and r
 | Clip Studio | Home has the URL/upload composer and creator list; All Videos shows job progress and clip review. |
 | Viral Clone | Analyzes a reference video's structure and writes original script variants. |
 | Video Generator | Turns an idea or script into a narrated, captioned video using Agenttube's local rendering workflow. |
-| Automation Agent | Embeds the original channel automation dashboard when its service is running. |
+| Automation Agent | Opens the channel automation workspace inside Agenttube and starts its runtime on demand. |
 | Video Studio | Shows status and logs for the original-video workflow and can open its interface separately. |
 | Clip Editor | Trims and reframes clips, or builds manual Gaming/Reaction and Podcast split layouts from the retained source video; edits are new reviewable copies. |
 | Social Publishing | Publishes directly to configured platforms and manages Agenttube's local post schedule. |
@@ -52,14 +52,14 @@ PeakCut is not a dashboard tab. Its source remains available separately in [`pea
 
 ## Automation Agent
 
-The Automation Agent is the original YouTube channel-management application, running as a separate Node.js service on port 3456. Its dashboard tab shows service status and readable logs, and can start or stop the service. After installing dependencies, finish credential setup in a terminal from the Agenttube folder:
+The Automation Agent is integrated into the Agenttube dashboard. Its existing Node.js runtime is started and managed in the background when you open the **Automation Agent** tab; you do not need to launch a separate service or open another dashboard. Install dependencies and finish credential setup once from the Agenttube folder:
 
 ```bash
 npm install
 npm run credentials:setup
 ```
 
-The setup wizard connects YouTube and configures an AI provider and channel settings. Keep API keys in the terminal, not the dashboard. Once setup is complete, click **Start service** in the tab. The Agent schedules content created in its own channel workflow; it does not automatically import or schedule files uploaded to Clip Studio. To publish or schedule a Clip Studio clip, approve it in **All Videos** and choose **Publish…**. Settings are documented in [`.env.example`](.env.example).
+The setup wizard connects YouTube and configures an AI provider and channel settings. Keep API keys in the terminal, not the dashboard. After setup, opening the tab starts the runtime automatically, and closing Agenttube stops the managed process. The Agent schedules content created in its channel workflow; it does not automatically import or schedule files uploaded to Clip Studio. To publish or schedule a Clip Studio clip, approve it in **All Videos** and choose **Publish…**. Settings are documented in [`.env.example`](.env.example).
 
 ### YouTube credentials
 
@@ -138,7 +138,7 @@ npm run clip -- "https://www.youtube.com/@creator" --live --permission "email fr
 
 Needs FFmpeg with libass on `PATH`. Output goes to `data/clips/<job-id>/`. Run `npm run clip -- --help` for all options; `--model` also accepts a local faster-whisper folder for networks that block model downloads. Moment selection and live clipping are inspired by [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT); per-clip title variants by [Hypit](https://github.com/hypit-ai/hypit).
 
-**Automation Agent tab.** Shows the original YouTube Automation Agent dashboard (port 3456) when its separate service is running, along with status, logs, and an **Open in new window** link. Start it from the Agenttube folder with `npm start`; setup requires `npm install` and the walkthrough above. The tab itself has no Start/Stop controls.
+**Automation Agent tab.** Hosts the channel automation workspace inside Agenttube. The runtime starts when the tab opens and is stopped when Agenttube exits. Install dependencies and complete the credential walkthrough once; do not run `npm start` separately for the dashboard integration.
 
 **Video Studio tab.** Shows the migrated original-video workflow's status and logs and provides an **Open in new window** link. It covers topic research, script writing, narration, stock visuals, rendering, metadata editing, review, and optional YouTube upload. Install its isolated dependencies once, then start the standalone service:
 

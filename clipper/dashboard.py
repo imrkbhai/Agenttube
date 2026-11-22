@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -44,6 +45,7 @@ AGENT_PORT = int(os.getenv("AGENT_PORT", "3456"))
 AGENT_URL = f"http://127.0.0.1:{AGENT_PORT}"
 AGENT_LOG = CLIPS_DIR / "agent.log"
 INSPIRATION_URL = "https://raw.githubusercontent.com/yihui-dev/awesome-opus5-5-videos/main/data/videos.json"
+INSPIRATION_BACKUP = ROOT / "repo" / "awesome-opus5-5-videos-main" / "data" / "videos.json"
 STUDIO_ROOT = ROOT / "studio"
 STUDIO_GUI = STUDIO_ROOT / "gui.py"
 STUDIO_LOG = ROOT / "logs" / "video-studio.log"
@@ -295,6 +297,9 @@ def start_job(body: dict) -> dict:
     topic = _text(body, "topic", 300, required=mode == "clone")
     creator, niche = _text(body, "creator", 100), _text(body, "niche", 100)
     model = _text(body, "model", 40)
+    variant_mode = _text(body, "variant_mode", 20) or "full"
+    if mode == "clone" and variant_mode not in ("full", "hook_test"):
+        raise BadRequest("variant_mode must be full or hook_test")
     if model and not re.fullmatch(r"[a-z0-9.\-]+", model):
         raise BadRequest("model must be a whisper size like base or small")
 
@@ -317,7 +322,9 @@ def start_job(body: dict) -> dict:
     if mode == "live":
         command += ["--live", f"--live-shorts={_int(body, 'live_shorts', 1, 0, 5)}"]
     if mode == "clone":
-        command += [f"--clone-topic={topic}", f"--variants={_int(body, 'variants', 3, 1, 10)}"]
+        minimum, maximum = (2, 100) if variant_mode == "hook_test" else (1, 10)
+        command += [f"--clone-topic={topic}", f"--variant-mode={variant_mode}",
+                    f"--variants={_int(body, 'variants', 3, minimum, maximum)}"]
 
     return _spawn(job_id, job_dir, command)
 
@@ -325,13 +332,19 @@ def start_job(body: dict) -> dict:
 def start_upload(handler) -> dict:
     params = parse_qs(urlparse(handler.path).query, keep_blank_values=True)
     body = {key: values[0] for key, values in params.items()}
-    if body.get("mode", "video") != "video":
-        raise BadRequest("Upload is available for finished videos, not live streams")
-    permission = _text(body, "permission", 300, required=True)
+    mode = body.get("mode", "video")
+    if mode not in ("video", "clone"):
+        raise BadRequest("Upload is available for finished videos and clone references")
+    is_clone = mode == "clone"
+    permission = _text(body, "permission", 300, required=not is_clone)
     creator, niche = _text(body, "creator", 100), _text(body, "niche", 100)
     model = _text(body, "model", 40)
     if model and not re.fullmatch(r"[a-z0-9.\-]+", model):
         raise BadRequest("model must be a whisper size like base or small")
+    topic = _text(body, "topic", 300, required=is_clone)
+    variant_mode = _text(body, "variant_mode", 20) or "full"
+    if is_clone and variant_mode not in ("full", "hook_test"):
+        raise BadRequest("variant_mode must be full or hook_test")
 
     filename = _text(body, "filename", 240, required=True)
     filename = Path(filename.replace("\\", "/")).name
@@ -349,7 +362,7 @@ def start_upload(handler) -> dict:
 
     job_id = new_job_id()
     job_dir = CLIPS_DIR / job_id
-    destination = job_dir / f"source{extension}"
+    destination = job_dir / f"{'reference' if is_clone else 'source'}{extension}"
     try:
         CLIPS_DIR.mkdir(parents=True, exist_ok=True)
         if shutil.disk_usage(CLIPS_DIR).free < length:
@@ -364,14 +377,24 @@ def start_upload(handler) -> dict:
                 video.write(chunk)
                 remaining -= len(chunk)
 
-        shorts = _int(body, "shorts", 5, 0, 20)
-        long = _int(body, "long", 1, 0, 5)
-        job = {"id": job_id, "created_at": now(), "kind": "video", "source_url": f"Uploaded: {filename}",
-               "title": Path(filename).stem, "creator": creator, "source_ready": True,
-               "state": "queued", "stage": "Starting"}
+        if is_clone:
+            minimum, maximum = (2, 100) if variant_mode == "hook_test" else (1, 10)
+            variants = _int(body, "variants", 3, minimum, maximum)
+            job = {"id": job_id, "created_at": now(), "kind": "clone",
+                   "source_url": f"Uploaded: {filename}", "title": Path(filename).stem,
+                   "state": "queued", "stage": "Starting"}
+        else:
+            shorts = _int(body, "shorts", 5, 0, 20)
+            long = _int(body, "long", 1, 0, 5)
+            job = {"id": job_id, "created_at": now(), "kind": "video", "source_url": f"Uploaded: {filename}",
+                   "title": Path(filename).stem, "creator": creator, "source_ready": True,
+                   "state": "queued", "stage": "Starting"}
         write_json(job_dir / "job.json", job)
-        command = [sys.executable, "-m", "clipper", str(destination), f"--job-id={job_id}", f"--out={CLIPS_DIR}",
-                   f"--shorts={shorts}", f"--long={long}", f"--permission={permission}"]
+        command = [sys.executable, "-m", "clipper", str(destination), f"--job-id={job_id}", f"--out={CLIPS_DIR}"]
+        if is_clone:
+            command += [f"--clone-topic={topic}", f"--variant-mode={variant_mode}", f"--variants={variants}"]
+        else:
+            command += [f"--shorts={shorts}", f"--long={long}", f"--permission={permission}"]
         if creator:
             command.append(f"--creator={creator}")
         if niche:
@@ -443,9 +466,16 @@ _inspiration: dict = {}
 def inspiration(query: str, category: str) -> list:
     if "items" not in _inspiration:
         import requests
-        response = requests.get(INSPIRATION_URL, timeout=30)
-        response.raise_for_status()
-        _inspiration["items"] = response.json()
+        try:
+            response = requests.get(INSPIRATION_URL, timeout=30)
+            response.raise_for_status()
+            items = response.json()
+        except requests.RequestException:
+            with INSPIRATION_BACKUP.open(encoding="utf-8") as backup:
+                items = json.load(backup)
+        if not isinstance(items, list):
+            raise ValueError("The inspiration catalog must be a JSON list")
+        _inspiration["items"] = items
     words = [w for w in query.lower().split() if w]
     results = []
     for item in _inspiration["items"]:
@@ -764,6 +794,43 @@ def agent_stop() -> None:
     process.wait(timeout=15)
 
 
+def agent_api_request(method: str, path: str, body: dict | None = None) -> tuple[dict, int]:
+    allowed = (
+        method == "GET" and path == "/api/dashboard"
+        or method == "POST" and path in {
+            "/generate", "/api/automation/pause", "/api/automation/resume",
+        }
+        or method == "POST" and re.fullmatch(r"/api/jobs/[\w-]+/(?:cancel|resume)", path)
+    )
+    if not allowed:
+        raise BadRequest("Unsupported Automation Agent action")
+    if not agent_status()["running"]:
+        raise BadRequest("Automation Agent is not ready yet")
+
+    headers = {"Accept": "application/json"}
+    api_key = os.getenv("API_KEY")
+    if api_key:
+        headers["x-api-key"] = api_key
+    data = json.dumps(body or {}).encode("utf-8") if method != "GET" else None
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(f"{AGENT_URL}{path}", data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            status = response.status
+            content = response.read()
+    except urllib.error.HTTPError as error:
+        status = error.code
+        content = error.read()
+    except (OSError, urllib.error.URLError) as error:
+        raise BadRequest("Could not reach the Automation Agent runtime") from error
+    try:
+        result = json.loads(content or b"{}")
+    except json.JSONDecodeError:
+        result = {"error": content.decode("utf-8", errors="replace")[:1000]}
+    return result, status
+
+
 # ── Original Video Studio ──────────────────────────────────────────────────
 
 def video_studio_status() -> dict:
@@ -919,6 +986,9 @@ class Handler(BaseHTTPRequestHandler):
                                                               f"http://127.0.0.1:{PEAKCUT_PORT}"})
             if path == "/api/agent":
                 return self._json(agent_status())
+            if path == "/api/agent/dashboard":
+                data, status = agent_api_request("GET", "/api/dashboard")
+                return self._json(data, status)
             if path == "/api/studio":
                 return self._json(video_studio_status())
             if path == "/api/peakcut":
@@ -976,6 +1046,18 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/agent/stop":
                 agent_stop()
                 return self._json({"ok": True})
+            if path == "/api/agent/generate":
+                data, status = agent_api_request("POST", "/generate", body)
+                return self._json(data, status)
+            match = re.fullmatch(r"/api/agent/automation/(pause|resume)", path)
+            if match:
+                data, status = agent_api_request("POST", f"/api/automation/{match.group(1)}", body)
+                return self._json(data, status)
+            match = re.fullmatch(r"/api/agent/jobs/([\w-]+)/(cancel|resume)", path)
+            if match:
+                target = f"/api/jobs/{match.group(1)}/{match.group(2)}"
+                data, status = agent_api_request("POST", target, body)
+                return self._json(data, status)
             if path == "/api/studio/start":
                 return self._json(video_studio_start())
             if path == "/api/studio/stop":

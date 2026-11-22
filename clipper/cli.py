@@ -78,7 +78,9 @@ def main() -> None:
     parser.add_argument("--window", type=float, default=300, help="Seconds of stream per live analysis window")
     parser.add_argument("--clone-topic", default="",
                         help="Viral Clone: analyse the video's structure and write variants about this topic")
-    parser.add_argument("--variants", type=int, default=3, help="Number of script variants for --clone-topic")
+    parser.add_argument("--variant-mode", choices=("full", "hook_test"), default="full",
+                        help="Generate full scripts or many hooks sharing one body")
+    parser.add_argument("--variants", type=int, default=3, help="Number of script or hook variants for --clone-topic")
     parser.add_argument("--create", choices=("script", "idea", "clone"),
                         help="Create an original video: source is a text file (script/idea) or a clone job id")
     parser.add_argument("--variant", type=int, default=1, help="Which clone variant to render (1-based)")
@@ -109,7 +111,7 @@ def main() -> None:
     update_job(job_dir, kind=kind, source_url=saved_job.get("source_url") or args.source, creator=args.creator,
                permission=args.permission, niche=args.niche, state="running", pid=os.getpid(),
                options={"shorts": args.shorts, "long": args.long, "live_shorts": args.live_shorts,
-                        "model": args.model, "window": args.window})
+                        "model": args.model, "window": args.window, "variant_mode": args.variant_mode})
 
     try:
         if args.create:
@@ -126,8 +128,9 @@ def main() -> None:
             print(f"\nDone. Video saved for review in:\n   {job_dir}")
             return
         if args.clone_topic:
-            run_clone(args.source, job_dir, args.clone_topic, args.niche, max(1, min(args.variants, 10)),
-                      args.model, args.language)
+            minimum, maximum = (2, 100) if args.variant_mode == "hook_test" else (1, 10)
+            run_clone(args.source, job_dir, args.clone_topic, args.niche,
+                      max(minimum, min(args.variants, maximum)), args.model, args.language, args.variant_mode)
             update_job(job_dir, state="finished")
             print(f"\nDone. Blueprint and variants saved in:\n   {job_dir / 'blueprint.json'}")
             return
