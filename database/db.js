@@ -19,6 +19,10 @@ class Database {
       
       // Connect to database
       this.db = new sqlite3.Database(this.dbPath);
+
+      await this.executeQuery('PRAGMA foreign_keys = ON');
+      await this.executeQuery('PRAGMA busy_timeout = 5000');
+      await this.executeQuery('PRAGMA journal_mode = WAL');
       
       // Create tables
       await this.createTables();
@@ -1765,7 +1769,7 @@ class Database {
 
   // Publishing methods
   async saveScheduleEntry(entry) {
-    const existing = await this.getLatestScheduleEntry(entry.productionId);
+    const existing = await this.getLatestScheduleEntry(entry.productionId, entry.metadata?.shortClipId || null);
     if (existing) return existing;
     const id = this.generateId('schedule');
     entry.id = id;
@@ -1815,12 +1819,21 @@ class Database {
     await this.executeQuery('DELETE FROM publish_schedule WHERE id = ?', [id]);
   }
 
-  async getLatestScheduleEntry(productionId) {
-    const row = await this.getRow(
-      'SELECT * FROM publish_schedule WHERE production_id = ? ORDER BY created_at DESC LIMIT 1',
+  async getLatestScheduleEntry(productionId, shortClipId = null) {
+    const rows = await this.getAllRows(
+      'SELECT * FROM publish_schedule WHERE production_id = ? ORDER BY created_at DESC',
       [productionId]
     );
-    return row ? this.deserializeScheduleEntry(row) : null;
+    const row = rows.find(candidate => {
+      const metadata = JSON.parse(candidate.metadata || '{}');
+      return (metadata.shortClipId || null) === (shortClipId || null);
+    });
+    if (row) return this.deserializeScheduleEntry(row);
+    if (shortClipId) return null;
+
+    const shortClip = await this.getShortClip(productionId);
+    if (!shortClip) return null;
+    return this.getLatestScheduleEntry(shortClip.productionId, shortClip.id);
   }
 
   deserializeScheduleEntry(row) {

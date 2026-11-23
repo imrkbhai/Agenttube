@@ -1581,6 +1581,7 @@ class SystemTest {
       const schedule = await db.getLatestScheduleEntry(rendered.id);
       if (
         scheduled.status !== 'scheduled' || !schedule || schedule.metadata.contentType !== 'short' ||
+        schedule.productionId !== productionId || schedule.metadata.shortClipId !== rendered.id ||
         schedule.metadata.sourceProductionId !== productionId || schedule.metadata.containsSyntheticMedia !== true
       ) {
         throw new Error('Approved Short did not inherit evidence into an independent schedule entry');
@@ -2163,8 +2164,16 @@ class SystemTest {
         await server.start();
         if (listenArgs?.host !== '127.0.0.1') throw new Error(`Dashboard server bound to ${listenArgs?.host} instead of loopback by default`);
         process.env.HOST = '0.0.0.0';
+        let remoteBindRejected = false;
+        try {
+          await server.start();
+        } catch (error) {
+          remoteBindRejected = /API_KEY is required/.test(error.message);
+        }
+        if (!remoteBindRejected) throw new Error('Remote binding was not rejected without API_KEY');
+        process.env.API_KEY = 'test-secret';
         await server.start();
-        if (listenArgs?.host !== '0.0.0.0') throw new Error('HOST did not override the dashboard bind address');
+        if (listenArgs?.host !== '0.0.0.0') throw new Error('HOST did not override the dashboard bind address when API_KEY is configured');
       } finally {
         console.log = quietLog;
         delete process.env.HOST;
@@ -2398,8 +2407,21 @@ class SystemTest {
   }
 
   async testAPIValidationAndSecurity() {
-    const { YouTubeAutomationAgent } = require('./index');
+    const { YouTubeAutomationAgent, assertSecureHostBinding } = require('./index');
     const agent = new YouTubeAutomationAgent();
+
+    assertSecureHostBinding('127.0.0.1', '');
+    assertSecureHostBinding('localhost', '');
+    let remoteWithoutKeyRejected = false;
+    try {
+      assertSecureHostBinding('0.0.0.0', '');
+    } catch (error) {
+      remoteWithoutKeyRejected = /API_KEY is required/.test(error.message);
+    }
+    if (!remoteWithoutKeyRejected) {
+      throw new Error('Remote binding was allowed without an API key');
+    }
+    assertSecureHostBinding('0.0.0.0', 'test-secret');
 
     if (typeof agent.validateGenerateRequestBody !== 'function') {
       throw new Error('validateGenerateRequestBody is not implemented');

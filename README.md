@@ -22,6 +22,8 @@ Clip Studio opens first: paste a video link or upload a file, manage creators, t
 - **Local-first.** Dashboard services run on your machine, with outputs kept in their configured data folders.
 - **Choose the right workflow.** Use Clip Studio for permitted source footage, Video Generator for narrated original videos, Clip Editor for post-render changes, and Automation Agent for channel planning.
 
+See the [architecture roadmap](docs/architecture-roadmap.md) for the phased shared-platform direction and current implementation status.
+
 ## Quick start
 
 For Clip Studio, you need Node.js 18.17 or newer, Python 3.10 or newer, and FFmpeg with libass installed. Create its isolated environment and start the dashboard:
@@ -44,7 +46,6 @@ The dashboard opens on Clip Studio Home. Use **All Videos** to follow jobs and r
 | Viral Clone | Analyzes a linked or uploaded reference, writes full scripts or shared-body hook tests, and can render a variant using the reference's measured format, color and motion. |
 | Video Generator | Turns an idea or script into a narrated, captioned video using Agenttube's local rendering workflow. |
 | Automation Agent | Opens the channel automation workspace inside Agenttube and starts its runtime on demand. |
-| Video Studio | Shows status and logs for the original-video workflow and can open its interface separately. |
 | Clip Editor | Trims and reframes clips, or builds manual Gaming/Reaction and Podcast split layouts from the retained source video; edits are new reviewable copies. |
 | Social Publishing | Publishes directly to configured platforms and manages Agenttube's local post schedule. |
 

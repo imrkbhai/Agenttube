@@ -280,7 +280,7 @@ class ShortsRepurposingService {
       : clip.description;
     const audio = bundle.assets?.audio || {};
     const schedule = await this.publishing.scheduleContent({
-      id: clip.id,
+      id: productionId,
       script: { title: clip.title },
       seo: {
         title: clip.title,

@@ -131,7 +131,6 @@
     .agent-header { align-items:flex-start; }
     .agent-actions { width:100%; flex-wrap:wrap; }
   }
-  iframe.video-studio { width:100%; height:calc(100vh - 300px); min-height:600px; border:1px solid var(--line); border-radius:8px; background:#09090f; }
   #scheduled-posts { display:grid; gap:8px; }
   #scheduled-posts .social-account { padding:10px 0; border-bottom:1px solid #eee8e4; }
   #tab-video-generator #create-form textarea { min-height:160px; }
@@ -364,7 +363,6 @@
     <button data-tab="clone">Viral Clone</button>
     <button data-tab="video-generator">Video Generator</button>
     <button data-tab="agent">Automation Agent</button>
-    <button data-tab="video">Video Studio</button>
     <button data-tab="social-publisher">Social Publishing</button>
   </nav>
   <div class="social-links" aria-label="Agenttube social links">
@@ -745,20 +743,6 @@
       <summary>Setup and connection details</summary>
       <p class="muted">AgentTube starts and manages the automation runtime for this workspace. To enable generation, configure an AI provider and YouTube credentials once with <code>npm run credentials:setup</code> in the AgentTube project folder.</p>
     </details>
-  </section>
-</main>
-
-<main id="tab-video" class="single hidden">
-  <section>
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-      <h2 style="margin:0">Original Video Studio</h2>
-      <span id="video-studio-badge"></span>
-      <span style="margin-left:auto"></span>
-      <a id="video-studio-open" target="_blank" rel="noopener"><button>Open in new window</button></a>
-    </div>
-    <p class="muted" id="video-studio-meta">Research, script, narrate, render, edit metadata, and review in the original-video workflow. Upload remains a separate action inside the studio.</p>
-    <iframe class="video-studio hidden" id="video-studio-frame" title="Original Video Studio"></iframe>
-    <details style="margin-top:10px"><summary>Studio log</summary><pre class="log" id="video-studio-log"></pre></details>
   </section>
 </main>
 
@@ -1386,11 +1370,10 @@ function renderAgentLists(data) {
 document.querySelectorAll('nav.tabs button').forEach(button => button.addEventListener('click', () => {
   activeTab = button.dataset.tab;
   document.querySelectorAll('nav.tabs button').forEach(item => item.classList.toggle('active', item === button));
-  for (const tab of ['studio', 'clone', 'video-generator', 'agent', 'video', 'social-publisher']) {
+  for (const tab of ['studio', 'clone', 'video-generator', 'agent', 'social-publisher']) {
     $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
   }
   if (activeTab === 'agent') loadAgent();
-  if (activeTab === 'video') loadVideoStudio();
   if (activeTab === 'social-publisher') loadSocialPublishing();
 }));
 
@@ -2126,22 +2109,6 @@ $('#insp-q').addEventListener('keydown', (event) => { if (event.key === 'Enter')
 
 // ── automation agent ──
 let agentStartRequested = false;
-
-// ── original video studio ──
-async function loadVideoStudio() {
-  const status = await api('/api/studio');
-  $('#video-studio-open').href = status.url;
-  $('#video-studio-badge').replaceChildren(status.running
-    ? badge(status.pipeline?.running ? 'generating' : 'running', status.pipeline?.running ? 'running' : 'finished')
-    : badge(status.ready ? 'stopped' : 'source missing', 'stopped'));
-  $('#video-studio-log').textContent = status.log || '';
-  const frame = $('#video-studio-frame');
-  frame.classList.toggle('hidden', !status.running);
-  if (status.running && frame.dataset.loaded !== '1') { frame.src = status.url; frame.dataset.loaded = '1'; }
-  if (!status.running) { frame.dataset.loaded = ''; frame.removeAttribute('src'); }
-}
-
-setInterval(() => { if (activeTab === 'video') loadVideoStudio(); }, 5000);
 
 </script>
 </body>

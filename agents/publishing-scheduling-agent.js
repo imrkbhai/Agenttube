@@ -55,7 +55,9 @@ class PublishingSchedulingAgent {
       }
 
       this.logger.info(`Scheduling content: ${productionData.id}`);
-      const existing = await this.db.getLatestScheduleEntry?.(productionData.id);
+      const existing = await this.db.getLatestScheduleEntry?.(
+        productionData.id, productionData.shortClipId || null
+      );
       if (existing) {
         if (['scheduled', 'paused'].includes(existing.status) && !this.publishQueue.some(entry => entry.id === existing.id)) {
           this.publishQueue.push(existing);
@@ -124,9 +126,7 @@ class PublishingSchedulingAgent {
       }
       this.logger.info(`Publishing content: ${contentId}`);
       
-      let scheduleEntry = this.publishQueue.find(entry =>
-        entry.productionId === contentId || entry.id === contentId
-      );
+      let scheduleEntry = this.findScheduleEntry(contentId);
       if (!scheduleEntry && this.db.getLatestScheduleEntry) {
         scheduleEntry = await this.db.getLatestScheduleEntry(contentId);
       }
@@ -186,7 +186,7 @@ class PublishingSchedulingAgent {
       await this.syncShortStatus(scheduleEntry, 'published');
       
       // Remove from queue
-      this.publishQueue = this.publishQueue.filter(entry => entry.productionId !== scheduleEntry.productionId);
+      this.removeScheduleFromQueue(scheduleEntry);
       
       this.logger.success(`Content published: ${scheduleEntry.youtubeUrl}`);
       return scheduleEntry;
@@ -293,7 +293,7 @@ class PublishingSchedulingAgent {
     scheduleEntry.error = null;
     await this.db.updateScheduleEntry(scheduleEntry);
     await this.syncShortStatus(scheduleEntry, 'published');
-    this.publishQueue = this.publishQueue.filter(entry => entry.productionId !== scheduleEntry.productionId);
+    this.removeScheduleFromQueue(scheduleEntry);
     this.logger.success(`Reconciled existing YouTube upload: ${scheduleEntry.youtubeUrl}`);
     return scheduleEntry;
   }
@@ -308,6 +308,26 @@ class PublishingSchedulingAgent {
       youtubeUrl: scheduleEntry.youtubeUrl || null,
       error
     });
+  }
+
+  removeScheduleFromQueue(scheduleEntry) {
+    this.publishQueue = this.publishQueue.filter(entry => {
+      if (scheduleEntry.id) return entry.id !== scheduleEntry.id;
+      if (scheduleEntry.metadata?.shortClipId) {
+        return entry.metadata?.shortClipId !== scheduleEntry.metadata.shortClipId;
+      }
+      return entry.productionId !== scheduleEntry.productionId;
+    });
+  }
+
+  findScheduleEntry(contentId) {
+    return this.publishQueue.find(entry => entry.id === contentId ||
+      entry.metadata?.shortClipId === contentId ||
+      (entry.productionId === contentId && !entry.metadata?.shortClipId)) || null;
+  }
+
+  async findOrLoadScheduleEntry(contentId) {
+    return this.findScheduleEntry(contentId) || await this.db.getLatestScheduleEntry?.(contentId);
   }
 
   async getVideoStream(videoPath) {
@@ -435,7 +455,7 @@ class PublishingSchedulingAgent {
 
     for (const entry of readyToPublish) {
       try {
-        await this.publishContent(entry.productionId);
+        await this.publishContent(entry.metadata?.shortClipId || entry.productionId);
         this.logger.info(`Auto-published: ${entry.title}`);
       } catch (error) {
         if (error.code === 'READINESS_BLOCKED') {
@@ -633,8 +653,7 @@ class PublishingSchedulingAgent {
     this.logger.info(`Emergency publish requested: ${contentId}`);
 
     if (delayMinutes > 0) {
-      const entry = this.publishQueue.find(e => e.productionId === contentId || e.id === contentId) ||
-        await this.db.getLatestScheduleEntry?.(contentId);
+      const entry = await this.findOrLoadScheduleEntry(contentId);
       if (!entry) throw new Error(`Content not found: ${contentId}`);
       const newPublishTime = new Date(Date.now() + (delayMinutes * 60 * 1000));
       entry.publishTime = newPublishTime.toISOString();
@@ -646,9 +665,7 @@ class PublishingSchedulingAgent {
   }
 
   async pauseScheduledContent(contentId) {
-    const entry = this.publishQueue.find(e => 
-      e.productionId === contentId || e.id === contentId
-    );
+    const entry = await this.findOrLoadScheduleEntry(contentId);
     
     if (!entry) {
       throw new Error(`Content not found: ${contentId}`);
@@ -662,9 +679,7 @@ class PublishingSchedulingAgent {
   }
 
   async resumeScheduledContent(contentId, newPublishTime = null) {
-    const entry = this.publishQueue.find(e => 
-      e.productionId === contentId || e.id === contentId
-    );
+    const entry = await this.findOrLoadScheduleEntry(contentId);
     
     if (!entry) {
       throw new Error(`Content not found: ${contentId}`);
@@ -688,8 +703,7 @@ class PublishingSchedulingAgent {
       error.status = 400;
       throw error;
     }
-    const entry = this.publishQueue.find(item => item.productionId === contentId || item.id === contentId) ||
-      await this.db.getLatestScheduleEntry?.(contentId);
+    const entry = await this.findOrLoadScheduleEntry(contentId);
     if (!entry) {
       const error = new Error(`Scheduled content not found: ${contentId}`);
       error.status = 404;
@@ -710,8 +724,7 @@ class PublishingSchedulingAgent {
   }
 
   async deleteScheduledContent(contentId) {
-    const entry = this.publishQueue.find(item => item.productionId === contentId || item.id === contentId) ||
-      await this.db.getLatestScheduleEntry?.(contentId);
+    const entry = await this.findOrLoadScheduleEntry(contentId);
     if (!entry) {
       const error = new Error(`Scheduled content not found: ${contentId}`);
       error.status = 404;
