@@ -85,7 +85,6 @@
   #publish-form .publish-result.failure { color:#d3343f; }
   #publish-form .publish-footer { display:flex; justify-content:flex-end; gap:8px; }
   pre.log { background:#0c0e12; border:1px solid var(--line); border-radius:6px; padding:10px; max-height:220px; overflow:auto; font-size:12px; white-space:pre-wrap; }
-  #tab-agent pre.log { color:#f1f5f9; background:#111827; border-color:#374151; }
   .notice { font-size:12px; color:var(--muted); border-left:3px solid var(--accent); padding-left:8px; margin-top:10px; }
   .error { color:var(--bad); font-size:12px; min-height:16px; margin-top:6px; }
   .hidden { display:none; }
@@ -97,40 +96,6 @@
   .variant { border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:12px; background:#12151b; }
   .variant ol { margin:8px 0 0; padding-left:20px; }
   .variant li { margin-bottom:6px; }
-  .agent-workspace { width:min(100%,1440px); margin:0 auto; }
-  .agent-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
-  .agent-header h2 { margin:0; }
-  .agent-actions { display:flex; align-items:center; gap:8px; }
-  .agent-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:16px 0; }
-  .agent-stat { min-width:0; padding:14px; border:1px solid var(--line); border-radius:8px; background:var(--panel); }
-  .agent-stat span { display:block; color:var(--muted); font-size:12px; }
-  .agent-stat strong { display:block; margin-top:5px; font-size:22px; }
-  .agent-dashboard-grid { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(0,1.2fr); gap:14px; }
-  .agent-dashboard-grid + .agent-dashboard-grid { margin-top:14px; }
-  .agent-panel { min-width:0; padding:16px; border:1px solid var(--line); border-radius:8px; background:var(--panel); }
-  .agent-panel h3 { margin:0 0 12px; font-size:14px; }
-  .agent-panel form { display:grid; gap:8px; }
-  .agent-panel form label { margin:0; }
-  .agent-panel form button { margin-top:4px; }
-  .agent-list { display:grid; gap:8px; }
-  .agent-job, .agent-row { min-width:0; padding:10px 0; border-top:1px solid var(--line); }
-  .agent-job:first-child, .agent-row:first-child { border-top:0; padding-top:0; }
-  .agent-job-head, .agent-row-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
-  .agent-job strong, .agent-row strong { overflow-wrap:anywhere; }
-  .agent-job-meta, .agent-row-meta { color:var(--muted); font-size:12px; }
-  .agent-job .progress { height:4px; margin:8px 0; overflow:hidden; border-radius:99px; background:var(--line); }
-  .agent-job .progress i { display:block; height:100%; background:var(--accent); }
-  .agent-job-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  .agent-job-actions select { width:auto; min-width:140px; padding:5px 7px; font-size:12px; }
-  .agent-empty { padding:18px 0; color:var(--muted); font-size:13px; }
-  #agent-setup { margin-top:12px; }
-  #agent-dashboard { margin-top:14px; }
-  @media (max-width:760px) {
-    .agent-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .agent-dashboard-grid { grid-template-columns:minmax(0,1fr); }
-    .agent-header { align-items:flex-start; }
-    .agent-actions { width:100%; flex-wrap:wrap; }
-  }
   #scheduled-posts { display:grid; gap:8px; }
   #scheduled-posts .social-account { padding:10px 0; border-bottom:1px solid #eee8e4; }
   #tab-video-generator #create-form textarea { min-height:160px; }
@@ -239,7 +204,7 @@
     header { grid-template-columns:1fr; grid-template-areas:"brand" "socials" "tabs"; row-gap:8px; }
     .social-links { justify-self:start; }
   }
-  @media (max-width: 640px) { #tab-clone { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { #tab-clone-any-video { grid-template-columns: 1fr; } }
   main.single { grid-template-columns: 1fr; }
   :root {
     --bg:#eef2fa; --panel:#fff; --line:#dfe5f1; --text:#17213a; --muted:#68738d;
@@ -360,9 +325,8 @@
   <h1>Agenttube</h1>
   <nav class="tabs">
     <button data-tab="studio" class="active">Clip Studio</button>
-    <button data-tab="clone">Viral Clone</button>
+    <button data-tab="clone-any-video">Clone Any Video</button>
     <button data-tab="video-generator">Video Generator</button>
-    <button data-tab="agent">Automation Agent</button>
     <button data-tab="social-publisher">Social Publishing</button>
   </nav>
   <div class="social-links" aria-label="Agenttube social links">
@@ -589,28 +553,35 @@
   </form>
 </dialog>
 
-<main id="tab-clone" class="hidden">
+<main id="tab-clone-any-video" class="hidden">
   <div>
     <section>
-      <h2>Clone a viral video</h2>
-      <p class="muted" style="margin-top:0">Paste a video that performed well. It is analyzed locally for framing, shot changes, visual movement, and color, then transcribed. Gemini uses that visual profile and the spoken structure (hook, beats, pacing, payoff) to write original scripts for your topic. The reference footage and sentences are not reused.</p>
+      <h2>Clone Any Video</h2>
+      <p class="muted" style="margin-top:0">Start from a video link or upload. AgentTube maps its visual rhythm and story structure, then drafts original variants for your idea. The source footage and transcript are not reused.</p>
       <form id="clone-form">
-        <label for="clone-reference-source">Reference source</label>
+        <h3>Reference</h3>
+        <label for="clone-reference-source">Video source</label>
         <select id="clone-reference-source"><option value="url">Video link</option><option value="upload">Upload a video</option></select>
         <div id="clone-reference-url"><label for="clone-reference-link">Reference video link</label><input id="clone-reference-link" name="url" required placeholder="https://www.youtube.com/shorts/…"></div>
         <div id="clone-reference-upload" class="hidden"><label for="clone-reference-file">Reference video file</label><input id="clone-reference-file" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,video/x-msvideo,.m4v"><div id="clone-upload-status" class="muted" role="status" aria-live="polite"></div></div>
+        <h3>Make it yours</h3>
         <label>Your topic</label><input name="topic" required maxlength="300" placeholder="Why most traders blow their first account">
+        <label for="clone-direction">What should change?</label>
+        <textarea id="clone-direction" name="direction" maxlength="1000" rows="3" placeholder="For example: replace the product with my app, keep the fast list format, and end with a signup call to action."></textarea>
         <div class="row">
           <div><label>Niche</label><input name="niche" maxlength="100" placeholder="trading"></div>
+        </div>
+        <h3>Variants</h3>
+        <div class="row">
           <div><label>Variant strategy</label><select id="clone-variant-mode" name="variant_mode"><option value="full">Full scripts (up to 10)</option><option value="hook_test">Hook tests, shared body (up to 100)</option></select></div>
           <div><label>Variants</label><input id="clone-variant-count" name="variants" type="number" min="1" max="10" value="3"></div>
         </div>
         <label>Whisper model</label>
         <select name="model"><option value="base">base — fastest</option><option value="small" selected>small — better accuracy</option></select>
-        <div class="row" style="margin-top:12px"><button class="primary" type="submit">Analyse and write variants</button></div>
+        <div class="row" style="margin-top:12px"><button class="primary" type="submit">Analyze reference and create variants</button></div>
         <div class="error" id="clone-error"></div>
       </form>
-      <p class="notice">Inspired by <a href="https://github.com/hypit-ai/hypit" target="_blank" rel="noopener" style="color:var(--accent)">Hypit</a>'s "clone any viral video" idea; this is an independent implementation.</p>
+      <p class="notice">Reference analysis, transcription, and rendering run locally. Only the script-generation request is sent to your configured Gemini provider.</p>
     </section>
     <section>
       <h2>Inspiration</h2>
@@ -629,6 +600,10 @@
     </section>
   </div>
   <div>
+    <section id="clone-empty" aria-live="polite">
+      <h2>Results</h2>
+      <p class="muted">Your reference analysis, blueprint, and script variants will appear here.</p>
+    </section>
     <section id="clone-detail" class="hidden">
       <h2 id="clone-title"></h2>
       <p class="muted" id="clone-meta"></p>
@@ -673,76 +648,6 @@
       <div class="error" id="create-error"></div>
     </form>
     <p class="notice">Agenttube renders with its local voice timing and FFmpeg pipeline using licensed Wikimedia Commons imagery. Completed videos appear in Clip Studio for review.</p>
-  </section>
-</main>
-
-<main id="tab-agent" class="single hidden">
-  <section class="agent-workspace">
-    <div class="agent-header">
-      <div>
-        <h2>Automation Agent</h2>
-        <p id="agent-meta" class="muted" role="status" aria-live="polite">Connecting to the Agenttube automation workspace…</p>
-      </div>
-      <div class="agent-actions">
-        <span id="agent-badge"></span>
-        <button id="agent-automation-toggle" class="hidden" type="button">Pause automation</button>
-        <button id="agent-refresh" type="button">Refresh</button>
-      </div>
-    </div>
-    <div id="agent-setup" class="notice hidden" role="status"></div>
-    <div id="agent-dashboard" class="hidden">
-      <div class="agent-stats">
-        <article class="agent-stat"><span>Needs review</span><strong id="agent-review-count">0</strong></article>
-        <article class="agent-stat"><span>Scheduled</span><strong id="agent-scheduled-count">0</strong></article>
-        <article class="agent-stat"><span>Published</span><strong id="agent-published-count">0</strong></article>
-        <article class="agent-stat"><span>Average performance</span><strong id="agent-average-score">—</strong></article>
-      </div>
-      <div class="agent-dashboard-grid">
-        <section class="agent-panel">
-          <h3>Create a video</h3>
-          <form id="agent-generate-form">
-            <label for="agent-topic">Topic</label>
-            <input id="agent-topic" name="topic" maxlength="200" placeholder="Leave blank for an agent-selected topic">
-            <label for="agent-style">Style</label>
-            <select id="agent-style" name="style">
-              <option value="">Choose automatically</option>
-              <option value="tutorial">Tutorial</option>
-              <option value="explainer">Explainer</option>
-              <option value="list">List</option>
-              <option value="review">Review</option>
-              <option value="story">Story</option>
-              <option value="educational">Educational</option>
-            </select>
-            <label for="agent-length">Video length</label>
-            <select id="agent-length" name="length">
-              <option value="short">Short</option>
-              <option value="medium" selected>Medium</option>
-              <option value="long">Long</option>
-            </select>
-            <button id="agent-generate-submit" class="primary" type="submit">Generate video</button>
-          </form>
-          <p id="agent-generate-status" class="muted" role="status" aria-live="polite"></p>
-        </section>
-        <section class="agent-panel">
-          <h3>Generation jobs</h3>
-          <div id="agent-jobs" class="agent-list"></div>
-        </section>
-      </div>
-      <div class="agent-dashboard-grid">
-        <section class="agent-panel">
-          <h3>Content pipeline</h3>
-          <div id="agent-reviews" class="agent-list"></div>
-        </section>
-        <section class="agent-panel">
-          <h3>Upcoming schedule</h3>
-          <div id="agent-schedule" class="agent-list"></div>
-        </section>
-      </div>
-    </div>
-    <details id="agent-setup-help" style="margin-top:12px">
-      <summary>Setup and connection details</summary>
-      <p class="muted">AgentTube starts and manages the automation runtime for this workspace. To enable generation, configure an AI provider and YouTube credentials once with <code>npm run credentials:setup</code> in the AgentTube project folder.</p>
-    </details>
   </section>
 </main>
 
@@ -1284,96 +1189,13 @@ setInterval(loadJobs, 4000);
 
 // ── tabs ──
 let activeTab = 'studio';
-let agentLoading = false;
-let agentData = null;
-
-function renderAgentJobs(jobs = []) {
-  const container = $('#agent-jobs');
-  container.replaceChildren();
-  if (!jobs.length) {
-    container.append(el('p', { class: 'agent-empty', textContent: 'No generation jobs yet.' }));
-    return;
-  }
-  const stages = ['strategy', 'script', 'thumbnail', 'seo', 'production', 'quality_review'];
-  for (const job of jobs.slice(0, 8)) {
-    const article = el('article', { class: 'agent-job' });
-    const heading = el('div', { class: 'agent-job-head' });
-    const info = el('div');
-    info.append(
-      el('strong', { textContent: job.title || job.topic || 'Agent-selected topic' }),
-      el('div', { class: 'agent-job-meta', textContent: `${job.stage || job.status || 'Queued'} · ${when(job.updated_at)}` }),
-    );
-    const state = String(job.status || 'unknown').toLowerCase();
-    heading.append(info, badge(state.replaceAll('_', ' '), ['failed', 'interrupted'].includes(state) ? 'failed' : state));
-    article.append(heading);
-    const progress = el('div', { class: 'progress' });
-    const fill = el('i');
-    fill.style.width = `${Math.max(0, Math.min(100, Number(job.progress) || 0))}%`;
-    progress.append(fill);
-    article.append(progress);
-    const actions = el('div', { class: 'agent-job-actions' });
-    if (['queued', 'running'].includes(state)) {
-      actions.append(el('button', {
-        class: 'small danger', textContent: 'Cancel',
-        onclick: () => agentJobAction(job.id, 'cancel'),
-      }));
-    } else if (['failed', 'interrupted'].includes(state)) {
-      const completed = new Set((job.checkpoints || []).filter(item => item.status === 'completed').map(item => item.stage));
-      const resumeFrom = stages.find(stage => !completed.has(stage)) || 'quality_review';
-      const select = el('select', { 'aria-label': `Resume stage for ${job.title || job.topic || job.id}` },
-        ...stages.map(stage => el('option', {
-          value: stage, textContent: stage.replaceAll('_', ' '), selected: stage === resumeFrom,
-        })));
-      actions.append(select, el('button', {
-        class: 'small', textContent: 'Resume',
-        onclick: () => agentJobAction(job.id, 'resume', { stage: select.value }),
-      }));
-    }
-    if (actions.childElementCount) article.append(actions);
-    container.append(article);
-  }
-}
-
-function renderAgentLists(data) {
-  const reviews = (data.pipeline || []).filter(item => ['needs_review', 'needs_attention'].includes(item.review_status));
-  const schedules = (data.schedule || []).filter(item => item.status === 'scheduled');
-  $('#agent-review-count').textContent = String(reviews.length);
-  $('#agent-scheduled-count').textContent = String(schedules.length);
-  $('#agent-published-count').textContent = String(data.stats?.published || 0);
-  $('#agent-average-score').textContent = data.analytics?.averagePerformanceScore
-    ? `${data.analytics.averagePerformanceScore}/100` : '—';
-  renderAgentJobs(data.jobs || []);
-
-  const reviewList = $('#agent-reviews');
-  reviewList.replaceChildren(...(reviews.length ? reviews.slice(0, 6).map(item => {
-    const checks = Array.isArray(item.qualityChecks) ? item.qualityChecks : [];
-    const score = checks.length ? Math.round(checks.filter(check => check.passed).length / checks.length * 100) : null;
-    return el('div', { class: 'agent-row' },
-      el('div', { class: 'agent-row-head' },
-        el('strong', { textContent: item.title || item.topic || 'Untitled production' }),
-        badge(String(item.review_status).replaceAll('_', ' '), 'queued')),
-      el('div', { class: 'agent-row-meta', textContent: `${item.topic || 'No topic'}${score === null ? '' : ` · Quality ${score}%`}` }));
-  }) : [el('p', { class: 'agent-empty', textContent: 'No content is waiting for review.' })]));
-
-  const scheduleList = $('#agent-schedule');
-  scheduleList.replaceChildren(...(schedules.length ? schedules.slice(0, 6).map(item => {
-    const date = item.publish_time ? new Date(item.publish_time) : null;
-    const dateText = date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : 'Time not set';
-    return el('div', { class: 'agent-row' },
-      el('div', { class: 'agent-row-head' },
-        el('strong', { textContent: item.title || 'Scheduled video' }),
-        badge('scheduled', 'queued')),
-      el('div', { class: 'agent-row-meta', textContent: dateText }));
-  }) : [el('p', { class: 'agent-empty', textContent: 'No videos are scheduled.' })]));
-}
 
 document.querySelectorAll('nav.tabs button').forEach(button => button.addEventListener('click', () => {
   activeTab = button.dataset.tab;
   document.querySelectorAll('nav.tabs button').forEach(item => item.classList.toggle('active', item === button));
-  for (const tab of ['studio', 'clone', 'video-generator', 'agent', 'social-publisher']) {
+  for (const tab of ['studio', 'clone-any-video', 'video-generator', 'social-publisher']) {
     $(`#tab-${tab}`).classList.toggle('hidden', tab !== activeTab);
   }
-  if (activeTab === 'agent') loadAgent();
   if (activeTab === 'social-publisher') loadSocialPublishing();
 }));
 
@@ -1425,101 +1247,6 @@ $('#clip-editor-regions').addEventListener('pointercancel', () => {
 });
 window.addEventListener('resize', resizeEditorRegionCanvas);
 $('#clip-editor-render').addEventListener('click', renderEditorClip);
-
-async function agentJobAction(jobId, action, body = {}) {
-  const status = $('#agent-generate-status');
-  status.textContent = action === 'cancel' ? 'Cancellation requested…' : 'Resuming generation…';
-  try {
-    await api(`/api/agent/jobs/${encodeURIComponent(jobId)}/${action}`, body);
-    status.textContent = action === 'cancel' ? 'Cancellation requested.' : 'Generation resumed.';
-    await loadAgent();
-  } catch (error) {
-    status.textContent = error.message;
-  }
-}
-
-async function loadAgent(retry = false) {
-  if (agentLoading) return;
-  agentLoading = true;
-  if (retry) agentStartRequested = false;
-  try {
-    let status = await api('/api/agent');
-    if (status.running) {
-      agentStartRequested = false;
-      agentData = await api('/api/agent/dashboard');
-      const setupRequired = Boolean(status.health?.setupRequired || agentData.system?.setupRequired);
-      $('#agent-badge').replaceChildren(badge(setupRequired ? 'setup required' : 'running', setupRequired ? 'queued' : 'finished'));
-      $('#agent-meta').textContent = setupRequired
-        ? 'The workspace is online. Configure YouTube and an AI provider to enable generation.'
-        : 'Automation is running inside AgentTube. Jobs, review status, and publishing dates are shown below.';
-      $('#agent-dashboard').classList.remove('hidden');
-      $('#agent-setup').classList.toggle('hidden', !setupRequired);
-      $('#agent-setup').textContent = setupRequired
-        ? 'One-time setup is required: configure YouTube sign-in and an AI provider from this project’s credentials setup.' : '';
-      $('#agent-generate-submit').disabled = setupRequired;
-      $('#agent-automation-toggle').classList.remove('hidden');
-      $('#agent-automation-toggle').disabled = setupRequired;
-      $('#agent-automation-toggle').textContent = agentData.system?.automationPaused ? 'Resume automation' : 'Pause automation';
-      renderAgentLists(agentData);
-      return;
-    }
-    if (status.ready && !status.managed && !agentStartRequested) {
-      agentStartRequested = true;
-      await api('/api/agent/start', {});
-      status = await api('/api/agent');
-    }
-    $('#agent-dashboard').classList.add('hidden');
-    $('#agent-setup').classList.remove('hidden');
-    $('#agent-setup').textContent = status.ready
-      ? 'Starting the Automation Agent inside AgentTube… This view will update automatically.'
-      : 'Automation dependencies are not installed. Install the project dependencies once from the AgentTube project folder.';
-    $('#agent-automation-toggle').classList.add('hidden');
-    $('#agent-badge').replaceChildren(badge(
-      !status.ready ? 'dependencies missing' : status.managed ? 'starting' : 'offline',
-      status.managed ? 'queued' : 'stopped',
-    ));
-    $('#agent-meta').textContent = !status.ready
-      ? 'The Automation Agent runtime is unavailable.'
-      : status.managed ? 'AgentTube is starting the managed runtime…' : 'Automation is offline. Select Refresh to retry.';
-  } catch (error) {
-    $('#agent-badge').replaceChildren(badge('unavailable', 'stopped'));
-    $('#agent-meta').textContent = `Could not connect to the Automation runtime: ${error.message}`;
-    $('#agent-dashboard').classList.add('hidden');
-  } finally {
-    agentLoading = false;
-  }
-}
-
-$('#agent-refresh').addEventListener('click', () => loadAgent(true));
-$('#agent-automation-toggle').addEventListener('click', async () => {
-  const action = agentData?.system?.automationPaused ? 'resume' : 'pause';
-  try {
-    await api(`/api/agent/automation/${action}`, {});
-    await loadAgent();
-  } catch (error) {
-    $('#agent-meta').textContent = error.message;
-  }
-});
-$('#agent-generate-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.currentTarget));
-  values.topic = values.topic.trim() || null;
-  values.style = values.style || null;
-  const button = $('#agent-generate-submit');
-  button.disabled = true;
-  $('#agent-generate-status').textContent = 'Submitting generation job…';
-  try {
-    const result = await api('/api/agent/generate', values);
-    $('#agent-generate-status').textContent = result.result?.id
-      ? `Generation job ${result.result.id} was queued.` : 'Generation job was queued.';
-    await loadAgent();
-  } catch (error) {
-    $('#agent-generate-status').textContent = error.message;
-  } finally {
-    button.disabled = Boolean(agentData?.system?.setupRequired);
-  }
-});
-setInterval(() => { if (activeTab === 'agent') loadAgent(); }, 5000);
 
 $('#clip-editor-source-frame').addEventListener('load', resizeEditorRegionCanvas);
 $('#clip-editor-source-frame').addEventListener('error', () => {
@@ -1918,8 +1645,8 @@ $('#clone-form').addEventListener('submit', async (event) => {
   const uploadReference = $('#clone-reference-source').value === 'upload';
   const file = $('#clone-reference-file').files[0];
   const submit = form.querySelector('button[type="submit"]');
+  let job;
   try {
-    let job;
     if (uploadReference) {
       if (!file) throw new Error('Choose a video file to upload.');
       if (file.size > 4 * 1024 * 1024 * 1024) throw new Error('Videos must be 4 GB or smaller.');
@@ -1945,10 +1672,17 @@ $('#clone-form').addEventListener('submit', async (event) => {
     }
     selectedClone = job.id;
     await loadJobs();
-  } catch (error) { $('#clone-error').textContent = error.message; }
+  } catch (error) {
+    if (uploadReference && error instanceof TypeError && error.message === 'Failed to fetch') {
+      $('#clone-upload-status').textContent = 'Upload interrupted. Your selected video is ready to retry.';
+      $('#clone-error').textContent = 'Could not reach the dashboard during upload. Check that it is still running, then retry.';
+    } else {
+      $('#clone-error').textContent = error.message;
+    }
+  }
   finally {
     submit.disabled = false;
-    if (uploadReference) $('#clone-reference-file').value = '';
+    if (uploadReference && job) $('#clone-reference-file').value = '';
   }
 });
 
@@ -1989,6 +1723,7 @@ function renderCloneJobs(jobs) {
 async function loadCloneDetail() {
   let data;
   try { data = await api(`/api/jobs/${selectedClone}`); } catch { return; }
+  $('#clone-empty').classList.add('hidden');
   const { job, blueprint } = data;
   $('#clone-detail').classList.remove('hidden');
   $('#clone-title').textContent = job.title || job.source_url;
@@ -2106,9 +1841,6 @@ async function searchInspiration() {
 $('#insp-go').addEventListener('click', searchInspiration);
 $('#insp-q').addEventListener('keydown', (event) => { if (event.key === 'Enter') searchInspiration(); });
 
-
-// ── automation agent ──
-let agentStartRequested = false;
 
 </script>
 </body>

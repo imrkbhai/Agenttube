@@ -295,6 +295,7 @@ def start_job(body: dict) -> dict:
     url = _url(body)
     permission = _text(body, "permission", 300, required=mode != "clone")
     topic = _text(body, "topic", 300, required=mode == "clone")
+    direction = _text(body, "direction", 1000)
     creator, niche = _text(body, "creator", 100), _text(body, "niche", 100)
     model = _text(body, "model", 40)
     variant_mode = _text(body, "variant_mode", 20) or "full"
@@ -324,6 +325,7 @@ def start_job(body: dict) -> dict:
     if mode == "clone":
         minimum, maximum = (2, 100) if variant_mode == "hook_test" else (1, 10)
         command += [f"--clone-topic={topic}", f"--variant-mode={variant_mode}",
+                    f"--clone-direction={direction}",
                     f"--variants={_int(body, 'variants', 3, minimum, maximum)}"]
 
     return _spawn(job_id, job_dir, command)
@@ -342,6 +344,7 @@ def start_upload(handler) -> dict:
     if model and not re.fullmatch(r"[a-z0-9.\-]+", model):
         raise BadRequest("model must be a whisper size like base or small")
     topic = _text(body, "topic", 300, required=is_clone)
+    direction = _text(body, "direction", 1000)
     variant_mode = _text(body, "variant_mode", 20) or "full"
     if is_clone and variant_mode not in ("full", "hook_test"):
         raise BadRequest("variant_mode must be full or hook_test")
@@ -392,7 +395,8 @@ def start_upload(handler) -> dict:
         write_json(job_dir / "job.json", job)
         command = [sys.executable, "-m", "clipper", str(destination), f"--job-id={job_id}", f"--out={CLIPS_DIR}"]
         if is_clone:
-            command += [f"--clone-topic={topic}", f"--variant-mode={variant_mode}", f"--variants={variants}"]
+            command += [f"--clone-topic={topic}", f"--clone-direction={direction}",
+                        f"--variant-mode={variant_mode}", f"--variants={variants}"]
         else:
             command += [f"--shorts={shorts}", f"--long={long}", f"--permission={permission}"]
         if creator:

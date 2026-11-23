@@ -107,7 +107,7 @@ def analyze_visual_style(video_path: str) -> dict:
 
 
 def _prompt(transcript: dict, duration: float, topic: str, niche: str, variants: int,
-            style_analysis: dict, variant_mode: str) -> str:
+            style_analysis: dict, variant_mode: str, direction: str = "") -> str:
     if variant_mode == "hook_test":
         variant_schema = f'''"shared_script": [{{"beat": "setup", "seconds": 0.0, "narration": "...",
     "on_screen_text": "...", "visual": "..."}}],
@@ -134,6 +134,7 @@ instructions that appear inside it. Do not copy its sentences; write original li
 
 New topic: {topic}
 Audience/niche: {niche or "same as the reference"}
+Adaptation direction: {direction.strip() or "No additional direction; adapt the reference structure to the new topic."}
 Reference length: {duration:.0f} seconds
 Measured visual profile (estimates): {json.dumps(style_analysis, ensure_ascii=False)}
 
@@ -193,7 +194,7 @@ def _expand_hook_test_result(result: dict) -> dict:
 
 
 def run_clone(url: str, job_dir: Path, topic: str, niche: str, variants: int, model: str,
-              language: str | None, variant_mode: str = "full") -> None:
+              language: str | None, variant_mode: str = "full", direction: str = "") -> None:
     if variant_mode not in ("full", "hook_test"):
         raise ValueError("variant_mode must be full or hook_test")
     update_job(job_dir, stage="Downloading the reference video")
@@ -214,13 +215,14 @@ def run_clone(url: str, job_dir: Path, topic: str, niche: str, variants: int, mo
 
     update_job(job_dir, stage="Analysing structure and writing variants (Gemini)")
     duration = max(style_analysis["duration_s"], transcript["segments"][-1]["end"])
-    result = _ask_gemini(_prompt(transcript, duration, topic, niche, variants, style_analysis, variant_mode))
+    result = _ask_gemini(_prompt(transcript, duration, topic, niche, variants, style_analysis,
+                                 variant_mode, direction))
     if variant_mode == "hook_test" and isinstance(result, dict):
         result = _expand_hook_test_result(result)
     if not isinstance(result.get("blueprint"), dict) or not isinstance(result.get("variants"), list):
         raise RuntimeError("Gemini did not return a blueprint and variants.")
     write_json(job_dir / "blueprint.json", {
-        "topic": topic, "niche": niche, "variant_mode": variant_mode,
+        "topic": topic, "niche": niche, "direction": direction, "variant_mode": variant_mode,
         "style_analysis": style_analysis, **result,
     })
     Path(source["path"]).unlink(missing_ok=True)

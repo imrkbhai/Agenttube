@@ -77,7 +77,9 @@ def main() -> None:
                         help="Shorts to cut per window during the stream; 0 = only clip after it ends")
     parser.add_argument("--window", type=float, default=300, help="Seconds of stream per live analysis window")
     parser.add_argument("--clone-topic", default="",
-                        help="Viral Clone: analyse the video's structure and write variants about this topic")
+                        help="Analyse a reference video and write variants about this topic")
+    parser.add_argument("--clone-direction", default="",
+                        help="Optional direction for adapting the reference structure to the new video")
     parser.add_argument("--variant-mode", choices=("full", "hook_test"), default="full",
                         help="Generate full scripts or many hooks sharing one body")
     parser.add_argument("--variants", type=int, default=3, help="Number of script or hook variants for --clone-topic")
@@ -97,6 +99,7 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     args.permission = args.permission.strip()
     args.clone_topic = args.clone_topic.strip()
+    args.clone_direction = args.clone_direction.strip()
     # Clips reuse the creator's footage; clones and created videos reuse nothing.
     if not args.permission and not args.clone_topic and not args.create:
         parser.error("--permission must describe how you have the right to clip this video.")
@@ -132,7 +135,8 @@ def main() -> None:
         if args.clone_topic:
             minimum, maximum = (2, 100) if args.variant_mode == "hook_test" else (1, 10)
             run_clone(args.source, job_dir, args.clone_topic, args.niche,
-                      max(minimum, min(args.variants, maximum)), args.model, args.language, args.variant_mode)
+                      max(minimum, min(args.variants, maximum)), args.model, args.language,
+                      args.variant_mode, args.clone_direction)
             update_job(job_dir, state="finished")
             print(f"\nDone. Blueprint and variants saved in:\n   {job_dir / 'blueprint.json'}")
             return

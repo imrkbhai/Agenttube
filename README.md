@@ -36,6 +36,8 @@ npm run clip:dashboard
 
 On macOS or Linux, use `.venv-clipper/bin/python` in place of `.venv-clipper\Scripts\python.exe`. Open `http://127.0.0.1:8765`.
 
+Run `.venv-clipper\Scripts\python.exe -m clipper doctor` before starting jobs to check Python packages, FFmpeg/FFprobe, caption-filter support, and optional AI/voice configuration. On macOS or Linux, use `.venv-clipper/bin/python -m clipper doctor`.
+
 The dashboard opens on Clip Studio Home. Use **All Videos** to follow jobs and review clips. Optional tools may need their own dependencies and credentials; see the sections below.
 
 ## Dashboard tabs
@@ -43,24 +45,23 @@ The dashboard opens on Clip Studio Home. Use **All Videos** to follow jobs and r
 | Tab | What it does |
 | --- | --- |
 | Clip Studio | Home has the URL/upload composer and creator list; All Videos shows job progress and clip review. |
-| Viral Clone | Analyzes a linked or uploaded reference, writes full scripts or shared-body hook tests, and can render a variant using the reference's measured format, color and motion. |
+| Clone Any Video | Analyzes a linked or uploaded reference, follows your adaptation brief, creates full scripts or shared-body hook tests, and can render a variant using the reference's measured format, color and motion. |
 | Video Generator | Turns an idea or script into a narrated, captioned video using Agenttube's local rendering workflow. |
-| Automation Agent | Opens the channel automation workspace inside Agenttube and starts its runtime on demand. |
 | Clip Editor | Trims and reframes clips, or builds manual Gaming/Reaction and Podcast split layouts from the retained source video; edits are new reviewable copies. |
 | Social Publishing | Publishes directly to configured platforms and manages Agenttube's local post schedule. |
 
 PeakCut is not a dashboard tab. Its source remains available separately in [`peakcut/`](peakcut/README.md).
 
-## Automation Agent
+## Automation Agent runtime
 
-The Automation Agent is integrated into the Agenttube dashboard. Its existing Node.js runtime is started and managed in the background when you open the **Automation Agent** tab; you do not need to launch a separate service or open another dashboard. Install dependencies and finish credential setup once from the Agenttube folder:
+The Automation Agent has no dashboard tab. Run its Node.js runtime from the Agenttube project folder after configuring credentials:
 
 ```bash
 npm install
 npm run credentials:setup
 ```
 
-The setup wizard connects YouTube and configures an AI provider and channel settings. Keep API keys in the terminal, not the dashboard. After setup, opening the tab starts the runtime automatically, and closing Agenttube stops the managed process. The Agent schedules content created in its channel workflow; it does not automatically import or schedule files uploaded to Clip Studio. To publish or schedule a Clip Studio clip, approve it in **All Videos** and choose **Publish…**. Settings are documented in [`.env.example`](.env.example).
+The setup wizard connects YouTube and configures an AI provider and channel settings. Keep API keys in the terminal, not the dashboard. After setup, run `npm start` to start the runtime and scheduler. The Agent schedules content created in its channel workflow; it does not automatically import or schedule files uploaded to Clip Studio. To publish or schedule a Clip Studio clip, approve it in **All Videos** and choose **Publish…**. Settings are documented in [`.env.example`](.env.example).
 
 ### YouTube credentials
 
@@ -138,8 +139,6 @@ npm run clip -- "https://www.youtube.com/@creator" --live --permission "email fr
 ```
 
 Needs FFmpeg with libass on `PATH`. Output goes to `data/clips/<job-id>/`. Run `npm run clip -- --help` for all options; `--model` also accepts a local faster-whisper folder for networks that block model downloads. Moment selection and live clipping are inspired by [PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT); per-clip title variants by [Hypit](https://github.com/hypit-ai/hypit).
-
-**Automation Agent tab.** Hosts the channel automation workspace inside Agenttube. The runtime starts when the tab opens and is stopped when Agenttube exits. Install dependencies and complete the credential walkthrough once; do not run `npm start` separately for the dashboard integration.
 
 **Video Studio tab.** Shows the migrated original-video workflow's status and logs and provides an **Open in new window** link. It covers topic research, script writing, narration, stock visuals, rendering, metadata editing, review, and optional YouTube upload. Install its isolated dependencies once, then start the standalone service:
 

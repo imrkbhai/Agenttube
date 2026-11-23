@@ -63,6 +63,16 @@ class CloneStyleAnalysisTests(unittest.TestCase):
 
 
 class HookTestVariantTests(unittest.TestCase):
+    def test_prompt_includes_user_adaptation_direction(self):
+        prompt = clone._prompt(
+            {"segments": [{"start": 0, "end": 1, "text": "A reference line."}]},
+            10, "A new topic", "education", 2, {}, "full",
+            "Replace the product with my app and keep the fast list format.",
+        )
+
+        self.assertIn("Replace the product with my app and keep the fast list format.", prompt)
+        self.assertIn("Do not copy its sentences", prompt)
+
     def test_expands_hook_candidates_with_the_same_body_and_cta(self):
         shared_script = [{
             "beat": "setup", "seconds": 5, "narration": "The common explanation.",
